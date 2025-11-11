@@ -1,0 +1,26 @@
+{
+  "name": "minipaas",
+  "version": "1.0.0",
+  "description": "Mini PaaS autohospedado para despliegue de aplicaciones web",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["paas", "deploy", "hosting"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "multer": "^1.4.5-lts.1",
+    "adm-zip": "^0.5.10",
+    "cors": "^2.8.5",
+    "http-proxy-middleware": "^2.0.6",
+    "jsonwebtoken": "^9.0.2",
+    "bcrypt": "^5.1.1",
+    "cookie-parser": "^1.4.6",
+    "helmet": "^7.1.0",
+    "jszip": "^3.10.1"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "ejemplo-api",
+  "version": "1.0.0",
+  "description": "API de ejemplo para MiniPaaS con variables de entorno",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["api", "ejemplo", "minipaas"],
+  "author": "",
+  "license": "MIT"
+}

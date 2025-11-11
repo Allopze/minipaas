@@ -1,0 +1,15 @@
+{
+  "users": [
+    {
+      "username": "Allopze",
+      "password": "$2b$10$BbJYKxqbE3zOeW3d8iF2VuTL9NDhGofX13Vbs4LMkbRFvTBWAGi0u",
+      "createdAt": "2025-11-09T04:36:57.059Z",
+      "updatedAt": "2025-11-11T01:24:23.613Z",
+      "passwordChangedAt": "2025-11-11T01:24:23.605Z",
+      "failedAttempts": 0,
+      "lockedUntil": null,
+      "forcePasswordChange": false,
+      "forceUsernameChange": false
+    }
+  ]
+}

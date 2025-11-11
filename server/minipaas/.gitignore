@@ -1,0 +1,13 @@
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+apps/*
+!apps/.gitkeep
+data/apps.json
+logs/*
+!logs/.gitkeep
+*.zip
+.env
+.vscode/
+.idea/

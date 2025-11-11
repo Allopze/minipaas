@@ -1,0 +1,61 @@
+  async changePassword(username, oldPassword, newPassword) {
+    const { users, user, userIndex } = this.findUser(username);
+    
+    if (!user) {
+      return { success: false, error: 'Usuario no encontrado' };
+    }
+
+    let isValid = false;\n    if (oldPassword) {\n      try {\n        isValid = await bcrypt.compare(oldPassword, user.password);\n      } catch {}\n    }\n    // En primer login, permite cambio aunque falle la verificación\n    if (!isValid && !user.forcePasswordChange) {\n      return { success: false, error: 'Contraseña actual incorrecta' };\n    };
+    }
+
+    if (oldPassword === newPassword) {
+      return { success: false, error: 'La contraseña nueva no puede ser igual a la anterior' };
+    }
+
+    const policy = this.validatePasswordPolicy(newPassword);
+    if (!policy.valid) {
+      return { success: false, error: policy.errors.join(' ') };
+    }
+
+    users[userIndex].password = await bcrypt.hash(newPassword, 10);
+    const now = new Date().toISOString();
+    users[userIndex].updatedAt = now;
+    users[userIndex].passwordChangedAt = now;
+    users[userIndex].forcePasswordChange = false;
+    users[userIndex].failedAttempts = 0;
+    users[userIndex].lockedUntil = null;
+    
+    this.saveUsers(users);
+    
+    return { success: true, message: 'Contraseña actualizada' };
+  }
+
+  async changeUsername(currentUsername, newUsername) {
+    const { users, user, userIndex } = this.findUser(currentUsername);
+    
+    if (!user) {
+      return { success: false, error: 'Usuario no encontrado' };
+    }
+
+    const existingUser = users.find(u => u.username === newUsername);
+    if (existingUser) {
+      return { success: false, error: 'El nombre de usuario ya existe' };
+    }
+
+    users[userIndex].username = newUsername;
+    users[userIndex].updatedAt = new Date().toISOString();
+    users[userIndex].forceUsernameChange = false;
+    
+    this.saveUsers(users);
+    
+    return { success: true, message: 'Nombre de usuario actualizado' };
+  }
+
+  getUserRecord(username) {
+    const { user } = this.findUser(username);
+    return user;
+  }
+}
+
+function authMiddleware(authManager) {
+  const publicPaths = ['/login', '/api/auth/login'];

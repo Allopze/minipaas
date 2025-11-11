@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Estática de Ejemplo</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🎉 ¡Aplicación Estática Desplegada!</h1>
+        <p>Esta es una aplicación de ejemplo desplegada en MiniPaaS</p>
+        
+        <div class="card">
+            <h2>Información</h2>
+            <p><strong>Tipo:</strong> Aplicación estática (HTML, CSS, JS)</p>
+            <p><strong>Estado:</strong> <span class="status">✅ Funcionando</span></p>
+            <p><strong>Hora actual:</strong> <span id="time"></span></p>
+        </div>
+
+        <div class="card">
+            <h2>Características</h2>
+            <ul>
+                <li>No requiere servidor Node.js</li>
+                <li>Servida directamente por Express</li>
+                <li>Ideal para sitios web simples</li>
+                <li>HTML, CSS y JavaScript puro</li>
+            </ul>
+        </div>
+
+        <button onclick="alert('¡Botón funcionando!')">Probar Interactividad</button>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
