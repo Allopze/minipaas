@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+  minipaas:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: minipaas:latest
+    container_name: minipaas
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      # Establece orígenes permitidos para CORS (separados por comas)
+      # - ALLOWED_ORIGINS=https://tu-dominio.com,https://otro-dominio.com
+      # Fuerza cookie segura si sirves tras HTTPS (recomendado en prod)
+      # - COOKIE_SECURE=true
+      # Cambia puerto interno si deseas (por defecto 5050)
+      # - PORT=5050
+    ports:
+      - "5050:5050"
+    volumes:
+      - minipaas-apps:/usr/src/app/apps
+      - minipaas-data:/usr/src/app/data
+      - minipaas-logs:/usr/src/app/logs
+      - minipaas-backups:/usr/src/app/backups
+
+volumes:
+  minipaas-apps:
+  minipaas-data:
+  minipaas-logs:
+  minipaas-backups:
+
