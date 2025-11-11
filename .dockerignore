@@ -1,0 +1,28 @@
+# VCS
+.git
+.gitignore
+
+# Node
+node_modules
+npm-debug.log*
+npm_smoke_*.log
+
+# Runtime data (use volumes instead)
+apps
+data
+logs
+backups
+
+# IDE/OS
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+
+# Builds/archives
+*.zip
+
+# Misc
+tmp_before.txt
+ejemplos
+
