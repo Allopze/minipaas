@@ -33,12 +33,13 @@ class AuthManager {
     return secret;
   }
 
-  async ensureDefaultUser() {
+  ensureDefaultUser() {
     if (!fs.existsSync(this.usersFilePath)) {
       const now = new Date().toISOString();
+      const defaultPasswordHash = bcrypt.hashSync('admin123', 10);
       const defaultUser = {
         username: 'admin',
-        password: await bcrypt.hash('admin123', 10), // Cambiar en producción
+        password: defaultPasswordHash, // Cambiar en producción
         createdAt: now,
         passwordChangedAt: now,
         failedAttempts: 0,

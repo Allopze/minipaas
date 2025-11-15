@@ -4,18 +4,18 @@ Mini PaaS autohospedado para desplegar aplicaciones web de forma rápida y senci
 
 ## 🚀 Características
 
-- ✅ Despliegue de aplicaciones estáticas (HTML, CSS, JS)
-- ✅ Despliegue de aplicaciones Node.js
-- ✅ Asignación automática de puertos disponibles
-- ✅ Panel de administración web moderno con diseño glassmorphic
-- ✅ Modos claro y oscuro
-- ✅ Gestión completa: iniciar, detener, reiniciar y eliminar apps
-- ✅ Visualización de logs en tiempo real
-- ✅ Persistencia local en JSON (sin bases de datos)
-- ✅ Sin dependencia de Docker
-- ✅ Preparado para Cloudflare Tunnel
+- Despliegue de aplicaciones estáticas (HTML, CSS, JS)
+- Despliegue de aplicaciones Node.js
+- Asignación automática de puertos disponibles
+- Panel de administración web moderno con diseño glassmorphic
+- Modos claro y oscuro
+- Gestión completa: iniciar, detener, reiniciar y eliminar apps
+- Visualización de logs en tiempo real
+- Persistencia local en JSON (sin bases de datos)
+- Sin dependencia de Docker
+- Preparado para Cloudflare Tunnel
 
-## 📋 Requisitos
+## Requisitos
 
 ### En Ubuntu Server (Producción)
 
@@ -30,7 +30,7 @@ Mini PaaS autohospedado para desplegar aplicaciones web de forma rápida y senci
 - npm 6.x o superior
 - Visual Studio Code (recomendado)
 
-## 🔧 Instalación en Ubuntu Server
+## Instalación en Ubuntu Server
 
 ### 1. Instalar Node.js y npm
 
@@ -101,7 +101,7 @@ Deberías ver:
 chmod -R 755 /server/minipaas/
 ```
 
-## ▶️ Ejecutar el sistema
+## Ejecutar el sistema
 
 ### Modo desarrollo (con logs en consola)
 
@@ -137,7 +137,7 @@ pm2 restart minipaas
 pm2 stop minipaas
 ```
 
-## 🌐 Acceso al panel
+## Acceso al panel
 
 Una vez iniciado, el panel estará disponible en:
 
@@ -149,7 +149,7 @@ Por ejemplo:
 - En la red local: `http://192.168.1.100:5050`
 - Localhost: `http://localhost:5050`
 
-## 📦 Cómo desplegar una aplicación
+## Cómo desplegar una aplicación
 
 ### 1. Preparar tu proyecto
 
@@ -271,7 +271,7 @@ ingress:
   - service: http_status:404
 ```
 
-## 📊 API REST
+## API REST
 
 El sistema expone una API REST completa:
 
@@ -329,7 +329,7 @@ Obtiene información del sistema.
 #### `GET /api/ports/next`
 Obtiene el siguiente puerto disponible (debug).
 
-## 🗂️ Estructura de archivos
+## Estructura de archivos
 
 ```
 /server/minipaas/
@@ -355,7 +355,7 @@ Obtiene el siguiente puerto disponible (debug).
 └── README.md
 ```
 
-## 🔍 Resolución de problemas
+## Resolución de problemas
 
 ### El panel no carga
 
@@ -402,7 +402,7 @@ sudo kill $(sudo lsof -t -i:5200)
 - El nombre de la app solo puede contener letras, números, guiones y guiones bajos
 - Verifica permisos de escritura en `/server/minipaas/apps/`
 
-## 🛡️ Seguridad
+## Seguridad
 
 ### Recomendaciones
 
@@ -433,14 +433,12 @@ npm audit fix
 - Los logs se almacenan indefinidamente; considera implementar rotación de logs
 - El sistema detecta automáticamente si una app es estática o Node.js basándose en la presencia de `package.json`, `server.js` o `index.js`
 
-## 🤝 Contribuciones
+## Contribuciones
 
 Este es un proyecto educativo. Siéntete libre de modificarlo según tus necesidades.
 
-## 📄 Licencia
+## Licencia
 
 MIT License
 
 ---
-
-**Desarrollado para despliegues simples y rápidos sin complejidad innecesaria.**

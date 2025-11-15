@@ -12,7 +12,7 @@ const { setupProxyMiddlewares } = require('./middleware/proxy');
 const app = express();
 app.disable('x-powered-by');
 const PORT = process.env.PORT || 5050;
-const HOST = '0.0.0.0';
+const HOST = '127.0.0.1';
 const rawAllowedOrigins = process.env.ALLOWED_ORIGINS || '';
 const allowedOrigins = rawAllowedOrigins
   .split(',')
@@ -261,7 +261,8 @@ app.listen(PORT, HOST, async () => {
   console.log('='.repeat(50));
   console.log('🚀 MiniPaaS iniciado');
   console.log('='.repeat(50));
-  console.log(`📡 Panel de administración: http://${HOST}:${PORT}`);
+  console.log(`📡 Panel de administración: http://127.0.0.1:${PORT}`);
+  console.log(`📡 Panel de administración (localhost): http://localhost:${PORT}`);
   console.log(`📂 Directorio de apps: ${APPS_DIR}`);
   console.log(`💾 Directorio de datos: ${DATA_DIR}`);
   console.log(`📝 Directorio de logs: ${LOGS_DIR}`);

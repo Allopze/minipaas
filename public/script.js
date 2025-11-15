@@ -199,6 +199,37 @@ async function init() {
   
   // Iniciar auto-refresh cada 5 segundos para healthcheck
   startHealthcheckPolling();
+  
+  // Delegación de eventos para botones de las tarjetas de apps
+  appsGrid.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    
+    const card = btn.closest('.app-card');
+    if (!card) return;
+    
+    const appName = card.id.replace('app-', '');
+    const app = apps.find(a => a.name === appName);
+    if (!app) return;
+    
+    if (btn.classList.contains('btn-open')) {
+      openApp(app);
+    } else if (btn.classList.contains('btn-pause')) {
+      await pauseApp(app.name);
+    } else if (btn.classList.contains('btn-resume')) {
+      await resumeApp(app.name);
+    } else if (btn.classList.contains('btn-restart')) {
+      await restartApp(app.name);
+    } else if (btn.classList.contains('btn-logs')) {
+      await showLogs(app.name);
+    } else if (btn.classList.contains('btn-env')) {
+      await showEnvVars(app.name);
+    } else if (btn.classList.contains('btn-backups')) {
+      await showBackups(app.name);
+    } else if (btn.classList.contains('btn-delete')) {
+      await deleteApp(app.name);
+    }
+  });
 }
 
 // Cambiar tema
@@ -361,6 +392,7 @@ async function loadApps() {
 // Renderizar apps
 function renderApps() {
   if (apps.length === 0) {
+    appsGrid.innerHTML = '';
     emptyState.style.display = 'block';
     return;
   }
@@ -368,36 +400,12 @@ function renderApps() {
   emptyState.style.display = 'none';
   
   appsGrid.innerHTML = apps.map(app => createAppCard(app)).join('');
-  
-  // Agregar event listeners a los botones
-  apps.forEach(app => {
-    const card = document.getElementById(`app-${app.name}`);
-    if (card) {
-      card.querySelector('.btn-open')?.addEventListener('click', () => openApp(app));
-      card.querySelector('.btn-pause')?.addEventListener('click', () => pauseApp(app.name));
-      card.querySelector('.btn-resume')?.addEventListener('click', () => resumeApp(app.name));
-      card.querySelector('.btn-restart')?.addEventListener('click', () => restartApp(app.name));
-      card.querySelector('.btn-logs')?.addEventListener('click', () => showLogs(app.name));
-      card.querySelector('.btn-env')?.addEventListener('click', () => showEnvVars(app.name));
-      card.querySelector('.btn-backups')?.addEventListener('click', () => showBackups(app.name));
-      card.querySelector('.btn-delete')?.addEventListener('click', () => deleteApp(app.name));
-    }
-  });
 }
 
 // Crear tarjeta de app
 function createAppCard(app) {
-  const serverIp = systemInfo.ips?.[0] || window.location.hostname;
-  
-  // Determinar URL según publicPath o tipo
-  let appUrl;
-  if (app.publicPath) {
-    appUrl = `http://${serverIp}:${window.location.port}${app.publicPath}`;
-  } else if (app.type === 'nodejs') {
-    appUrl = `http://${serverIp}:${app.port}`;
-  } else {
-    appUrl = `http://${serverIp}:${window.location.port}/apps/${app.name}`;
-  }
+  // Todas las apps usan localhost:puerto
+  const appUrl = `http://localhost:${app.port}`;
   
   const deployDate = new Date(app.deployedAt).toLocaleString('es-ES');
   const startCommandEscaped = app.startCommand ? escapeHtml(app.startCommand) : '';
@@ -950,17 +958,8 @@ function uploadAppWithProgress(formData) {
 
 // Abrir app
 function openApp(app) {
-  const serverIp = systemInfo.ips?.[0] || window.location.hostname;
-  
-  let url;
-  if (app.publicPath) {
-    url = `http://${serverIp}:${window.location.port}${app.publicPath}`;
-  } else if (app.type === 'nodejs') {
-    url = `http://${serverIp}:${app.port}`;
-  } else {
-    url = `http://${serverIp}:${window.location.port}/apps/${app.name}`;
-  }
-  
+  // Todas las apps usan localhost:puerto
+  const url = `http://localhost:${app.port}`;
   window.open(url, '_blank');
 }
 
@@ -1103,35 +1102,41 @@ function showConfirmation(title, message) {
     closeBtn.textContent = 'Cancelar';
     closeBtn.className = 'btn btn-secondary';
     
-    const confirmBtn = document.createElement('button');
-    confirmBtn.textContent = 'Eliminar';
-    confirmBtn.className = 'btn btn-danger';
-    confirmBtn.style.marginTop = '10px';
-    
+    // Buscar si ya existe el botón de confirmar
     const modalBody = closeBtn.parentElement;
-    modalBody.appendChild(confirmBtn);
+    let confirmBtn = modalBody.querySelector('.btn-danger');
+    
+    // Si no existe, crearlo
+    if (!confirmBtn) {
+      confirmBtn = document.createElement('button');
+      confirmBtn.className = 'btn btn-danger';
+      confirmBtn.style.marginTop = '10px';
+      modalBody.appendChild(confirmBtn);
+    }
+    
+    confirmBtn.textContent = 'Eliminar';
     
     notificationModal.classList.remove('hidden');
     
     const cleanup = () => {
-      confirmBtn.remove();
+      if (confirmBtn && confirmBtn.parentElement) {
+        confirmBtn.remove();
+      }
       closeBtn.textContent = 'Aceptar';
       closeBtn.className = 'btn btn-primary';
       notificationModal.classList.add('hidden');
+      confirmBtn.removeEventListener('click', handleConfirm);
+      closeBtn.removeEventListener('click', handleCancel);
     };
     
     const handleConfirm = () => {
       cleanup();
       resolve(true);
-      confirmBtn.removeEventListener('click', handleConfirm);
-      closeBtn.removeEventListener('click', handleCancel);
     };
     
     const handleCancel = () => {
       cleanup();
       resolve(false);
-      confirmBtn.removeEventListener('click', handleConfirm);
-      closeBtn.removeEventListener('click', handleCancel);
     };
     
     confirmBtn.addEventListener('click', handleConfirm);

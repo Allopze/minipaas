@@ -345,6 +345,8 @@ class AppManager {
 
     if (app.type === 'nodejs') {
       await this.startNodeApp(app);
+    } else if (app.type === 'static') {
+      await this.startStaticApp(app);
     }
 
     // Actualizar estado
@@ -409,26 +411,78 @@ class AppManager {
   }
 
   /**
+   * Inicia una app estática con servidor HTTP simple
+   */
+  async startStaticApp(app) {
+    const http = require('http');
+    const serveStatic = require('serve-static');
+    const finalhandler = require('finalhandler');
+    
+    const appPath = app.path;
+    const logPath = path.join(this.logsDir, `${app.name}.log`);
+    const logStream = fs.createWriteStream(logPath, { flags: 'a' });
+    
+    logStream.write(`[INFO] ${new Date().toISOString()}: Iniciando servidor estático en puerto ${app.port}\n`);
+
+    // Crear servidor para archivos estáticos
+    const serve = serveStatic(appPath, { index: ['index.html', 'index.htm'] });
+    
+    const server = http.createServer((req, res) => {
+      serve(req, res, finalhandler(req, res));
+    });
+
+    server.listen(app.port, '0.0.0.0', () => {
+      logStream.write(`[INFO] ${new Date().toISOString()}: Servidor estático escuchando en http://localhost:${app.port}\n`);
+    });
+
+    server.on('error', (err) => {
+      logStream.write(`[ERROR] ${new Date().toISOString()}: ${err.message}\n`);
+      logStream.end();
+    });
+
+    // Guardar referencia al servidor
+    this.runningProcesses.set(app.name, { 
+      server, 
+      kill: () => {
+        server.close();
+        logStream.end();
+      }
+    });
+  }
+
+  /**
    * Detiene una app
    */
   async stopApp(name) {
-    const process = this.runningProcesses.get(name);
-    if (process) {
-      return new Promise((resolve) => {
-        process.on('close', () => {
-          this.runningProcesses.delete(name);
-          resolve();
+    const processOrServer = this.runningProcesses.get(name);
+    if (processOrServer) {
+      // Si es un servidor HTTP (app estática)
+      if (processOrServer.server) {
+        return new Promise((resolve) => {
+          processOrServer.server.close(() => {
+            this.runningProcesses.delete(name);
+            resolve();
+          });
         });
-        
-        process.kill();
-        
-        // Force kill después de 5 segundos si no termina
-        setTimeout(() => {
-          if (this.runningProcesses.has(name)) {
-            process.kill('SIGKILL');
-          }
-        }, 5000);
-      });
+      }
+      // Si es un proceso (app Node.js)
+      else {
+        return new Promise((resolve) => {
+          processOrServer.on('close', () => {
+            this.runningProcesses.delete(name);
+            resolve();
+          });
+          
+          processOrServer.kill();
+          
+          // Force kill después de 5 segundos si no termina
+          setTimeout(() => {
+            if (this.runningProcesses.has(name)) {
+              processOrServer.kill('SIGKILL');
+            }
+          }, 5000);
+        });
+      }
     }
 
     // Actualizar estado

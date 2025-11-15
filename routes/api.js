@@ -368,13 +368,44 @@ module.exports = (appManager) => {
         return res.status(404).json({ ok: false, error: 'App no encontrada' });
       }
 
-      const { envVars } = req.body;
-      if (!envVars || typeof envVars !== 'object') {
+      const body = req.body && typeof req.body === 'object' ? req.body : null;
+      const envPayload = body && typeof body.envVars === 'object' && !Array.isArray(body.envVars)
+        ? body.envVars
+        : body;
+
+      if (!envPayload || typeof envPayload !== 'object' || Array.isArray(envPayload)) {
         return res.status(400).json({ ok: false, error: 'Variables de entorno inválidas' });
       }
 
-      appManager.envManager.setEnvVars(req.params.name, envVars);
-      res.json({ ok: true, message: 'Variables de entorno actualizadas' });
+      const mergedEnvVars = Object.assign({}, appManager.envManager.getEnvVars(req.params.name), envPayload);
+      appManager.envManager.setEnvVars(req.params.name, mergedEnvVars);
+      res.json({ ok: true, message: 'Variables de entorno actualizadas', envVars: mergedEnvVars });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
+  /**
+   * DELETE /api/apps/:name/envs/:key - Elimina una variable de entorno puntual
+   */
+  router.delete('/apps/:name/envs/:key', (req, res) => {
+    try {
+      const app = appManager.getApp(req.params.name);
+      if (!app) {
+        return res.status(404).json({ ok: false, error: 'App no encontrada' });
+      }
+
+      const key = req.params.key;
+      if (!key) {
+        return res.status(400).json({ ok: false, error: 'Clave de variable inválida' });
+      }
+
+      const result = appManager.envManager.deleteEnvVar(req.params.name, key);
+      if (!result) {
+        return res.status(500).json({ ok: false, error: 'No se pudo eliminar la variable' });
+      }
+
+      res.json({ ok: true, message: 'Variable eliminada', key });
     } catch (error) {
       res.status(500).json({ ok: false, error: error.message });
     }
