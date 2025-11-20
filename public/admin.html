@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administración - Mini PaaS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --accent: #ef4444;
+            --accent-hover: #dc2626;
+            --accent-light: #fee2e2;
+        }
+
+        .dark {
+            --bg-color: #111111;
+            --card-bg: #222222;
+            --text-main: #e5e5e5;
+            --text-muted: #a3a3a3;
+            --border-color: #333333;
+            --accent: #ef4444;
+            --accent-hover: #f87171;
+            --accent-light: rgba(239, 68, 68, 0.15);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .toast {
+            transform: translateY(100%);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav class="border-b border-[var(--border-color)] bg-[var(--card-bg)] sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-6 py-2.5 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <a href="/"
+                    class="p-2.5 rounded-xl text-[var(--accent)] hover:bg-gray-100 dark:hover:bg-[#333] transition">
+                    <i data-lucide="arrow-left" class="w-6 h-6"></i>
+                </a>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight leading-none">Administración</h1>
+                    <span class="text-xs text-[var(--text-muted)] font-medium">Panel de Control</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="themeToggle"
+                    class="p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-[#333] text-[var(--text-muted)] transition">
+                    <i data-lucide="moon" class="w-5 h-5 dark:hidden"></i>
+                    <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
+                </button>
+
+                <!-- User Menu -->
+                <div class="relative" id="userMenuContainer">
+                    <button id="userMenuBtn"
+                        class="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-[#333] transition flex items-center gap-2">
+                        <div
+                            class="w-9 h-9 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center text-[var(--text-main)] shadow-inner">
+                            <i data-lucide="user" class="w-5 h-5"></i>
+                        </div>
+                    </button>
+                    <div id="userDropdown"
+                        class="absolute right-0 mt-3 w-64 bg-[var(--card-bg)] rounded-2xl shadow-2xl border border-[var(--border-color)] hidden transform transition-all origin-top-right z-50 overflow-hidden">
+                        <div class="p-3">
+                            <div
+                                class="px-3 py-3 bg-slate-50 dark:bg-[#1a1a1a] rounded-xl mb-2 border border-[var(--border-color)]">
+                                <p class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">
+                                    Conectado como</p>
+                                <p class="text-sm font-semibold text-[var(--text-main)] truncate" id="userEmailDisplay">
+                                    Cargando...</p>
+                                <p class="text-xs text-[var(--accent)] font-medium mt-1 capitalize"
+                                    id="userRoleDisplay"></p>
+                            </div>
+                            <a href="/"
+                                class="w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-gray-100 dark:hover:bg-[#333] transition flex items-center gap-3">
+                                <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard
+                            </a>
+                            <a href="/settings.html"
+                                class="w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-gray-100 dark:hover:bg-[#333] transition flex items-center gap-3">
+                                <i data-lucide="settings" class="w-4 h-4"></i> Configuración
+                            </a>
+                            <div class="h-px bg-[var(--border-color)] my-2 mx-1"></div>
+                            <button onclick="logout()"
+                                class="w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition flex items-center gap-3">
+                                <i data-lucide="log-out" class="w-4 h-4"></i> Cerrar Sesión
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-1 w-full max-w-7xl mx-auto px-6 py-12">
+        <!-- Tabs -->
+        <div class="flex gap-4 mb-8 border-b border-[var(--border-color)]">
+            <button onclick="switchTab('branding')" id="tab-branding"
+                class="pb-4 px-2 font-medium text-[var(--accent)] border-b-2 border-[var(--accent)] transition">Branding</button>
+            <button onclick="switchTab('users')" id="tab-users"
+                class="pb-4 px-2 font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] transition">Usuarios</button>
+        </div>
+
+        <!-- Branding Section -->
+        <section id="branding-section" class="space-y-8">
+            <div class="bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] p-8 shadow-sm">
+                <h2 class="text-xl font-bold mb-6">Personalización</h2>
+                <form id="brandingForm" class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Nombre de la
+                            Aplicación</label>
+                        <input type="text" id="appName" name="appName" placeholder="Mini PaaS"
+                            class="w-full p-3 rounded-2xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:ring-2 focus:ring-[var(--accent)] outline-none transition">
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" id="showAppName" name="showAppName"
+                            class="w-5 h-5 text-[var(--accent)] rounded focus:ring-[var(--accent)]">
+                        <label for="showAppName" class="text-sm font-medium text-[var(--text-main)]">Mostrar nombre en
+                            el header</label>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Logo Claro</label>
+                            <div class="flex items-center gap-4">
+                                <label class="flex-1 cursor-pointer group">
+                                    <div
+                                        class="flex items-center justify-center w-full h-12 px-4 transition bg-[var(--bg-color)] border-2 border-dashed border-[var(--border-color)] rounded-2xl hover:border-[var(--accent)] hover:bg-red-50 dark:hover:bg-red-900/10">
+                                        <span id="logoLightName"
+                                            class="text-sm text-[var(--text-muted)] group-hover:text-[var(--accent)] truncate">Seleccionar
+                                            archivo...</span>
+                                    </div>
+                                    <input type="file" name="logoLight" accept="image/*" class="hidden"
+                                        onchange="updateFileName(this, 'logoLightName')">
+                                </label>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Logo Oscuro</label>
+                            <div class="flex items-center gap-4">
+                                <label class="flex-1 cursor-pointer group">
+                                    <div
+                                        class="flex items-center justify-center w-full h-12 px-4 transition bg-[var(--bg-color)] border-2 border-dashed border-[var(--border-color)] rounded-2xl hover:border-[var(--accent)] hover:bg-red-50 dark:hover:bg-red-900/10">
+                                        <span id="logoDarkName"
+                                            class="text-sm text-[var(--text-muted)] group-hover:text-[var(--accent)] truncate">Seleccionar
+                                            archivo...</span>
+                                    </div>
+                                    <input type="file" name="logoDark" accept="image/*" class="hidden"
+                                        onchange="updateFileName(this, 'logoDarkName')">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Favicon</label>
+                        <div class="flex items-center gap-4">
+                            <label class="flex-1 cursor-pointer group">
+                                <div
+                                    class="flex items-center justify-center w-full h-12 px-4 transition bg-[var(--bg-color)] border-2 border-dashed border-[var(--border-color)] rounded-2xl hover:border-[var(--accent)] hover:bg-red-50 dark:hover:bg-red-900/10">
+                                    <span id="faviconName"
+                                        class="text-sm text-[var(--text-muted)] group-hover:text-[var(--accent)] truncate">Seleccionar
+                                        archivo...</span>
+                                </div>
+                                <input type="file" name="favicon" accept="image/*" class="hidden"
+                                    onchange="updateFileName(this, 'faviconName')">
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="pt-4">
+                        <button type="submit"
+                            class="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-red-500/20 transition">
+                            Guardar Cambios
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- Users Section -->
+        <section id="users-section" class="hidden space-y-8">
+            <div class="bg-[var(--card-bg)] rounded-3xl border border-[var(--border-color)] p-8 shadow-sm">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold">Usuarios</h2>
+                    <button onclick="openAddUserModal()"
+                        class="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-4 py-2 rounded-2xl font-bold shadow-lg shadow-red-500/20 transition flex items-center gap-2">
+                        <i data-lucide="user-plus" class="w-4 h-4"></i> Nuevo Usuario
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-[var(--border-color)]">
+                                <th class="py-3 px-4 text-sm font-bold text-[var(--text-muted)]">ID</th>
+                                <th class="py-3 px-4 text-sm font-bold text-[var(--text-muted)]">Email</th>
+                                <th class="py-3 px-4 text-sm font-bold text-[var(--text-muted)]">Rol</th>
+                                <th class="py-3 px-4 text-sm font-bold text-[var(--text-muted)] text-right">Acciones
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <!-- Users injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Add User Modal -->
+    <div id="addUserModal"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
+        <div
+            class="bg-[var(--card-bg)] w-full max-w-md rounded-3xl shadow-2xl border border-[var(--border-color)] p-8 transform transition-all scale-95">
+            <h3 class="text-xl font-bold mb-6">Agregar Usuario</h3>
+            <form id="addUserForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Email</label>
+                    <input type="email" id="newUserEmail" required
+                        class="w-full p-3 rounded-2xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:ring-2 focus:ring-[var(--accent)] outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Contraseña</label>
+                    <input type="password" id="newUserPassword" required
+                        class="w-full p-3 rounded-2xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:ring-2 focus:ring-[var(--accent)] outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Rol</label>
+                    <select id="newUserRole"
+                        class="w-full p-3 rounded-2xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:ring-2 focus:ring-[var(--accent)] outline-none">
+                        <option value="user">Usuario</option>
+                        <option value="admin">Administrador</option>
+                    </select>
+                </div>
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="closeAddUserModal()"
+                        class="flex-1 py-3 rounded-2xl text-[var(--text-muted)] hover:bg-[var(--bg-color)] font-bold">Cancelar</button>
+                    <button type="submit"
+                        class="flex-1 py-3 rounded-2xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold shadow-lg shadow-red-500/20">Crear</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 toast">
+        <div
+            class="bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl rounded-2xl p-4 flex items-center gap-3 pr-6">
+            <div id="toastIcon" class="w-10 h-10 rounded-full flex items-center justify-center shrink-0"></div>
+            <div>
+                <h4 id="toastTitle" class="font-bold text-sm text-[var(--text-main)]">Notificación</h4>
+                <p id="toastMessage" class="text-xs text-[var(--text-muted)]">Mensaje de ejemplo</p>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // Auth Check
+        const token = localStorage.getItem('token');
+        if (!token) window.location.href = '/login.html';
+
+        // Theme Logic
+        const themeToggle = document.getElementById('themeToggle');
+        themeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark');
+            updateLogo();
+        });
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.body.classList.add('dark');
+        }
+
+        let currentSettings = {};
+
+        function updateLogo() {
+            const navLogo = document.getElementById('navLogo');
+            const navIconContainer = document.getElementById('navIconContainer');
+            if (!navLogo || !navIconContainer) return;
+
+            const isDark = document.body.classList.contains('dark');
+            const logoSrc = isDark ? (currentSettings.logoDark || currentSettings.logoLight) : currentSettings.logoLight;
+
+            if (logoSrc) {
+                navLogo.src = logoSrc;
+                navLogo.classList.remove('hidden');
+                navIconContainer.classList.add('hidden');
+            } else {
+                navLogo.classList.add('hidden');
+                navIconContainer.classList.remove('hidden');
+            }
+        }
+
+        // Toast Logic
+        function showToast(title, message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastIcon = document.getElementById('toastIcon');
+            const toastTitle = document.getElementById('toastTitle');
+            const toastMessage = document.getElementById('toastMessage');
+
+            toastTitle.textContent = title;
+            toastMessage.textContent = message;
+
+            if (type === 'success') {
+                toastIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400';
+                toastIcon.innerHTML = '<i data-lucide="check" class="w-5 h-5"></i>';
+            } else if (type === 'error') {
+                toastIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400';
+                toastIcon.innerHTML = '<i data-lucide="alert-circle" class="w-5 h-5"></i>';
+            }
+
+            lucide.createIcons();
+            toast.classList.add('show');
+            setTimeout(() => { toast.classList.remove('show'); }, 4000);
+        }
+
+        // Tabs Logic
+        function switchTab(tab) {
+            document.getElementById('branding-section').classList.add('hidden');
+            document.getElementById('users-section').classList.add('hidden');
+            document.getElementById('tab-branding').classList.replace('text-[var(--accent)]', 'text-[var(--text-muted)]');
+            document.getElementById('tab-branding').classList.remove('border-b-2', 'border-[var(--accent)]');
+            document.getElementById('tab-users').classList.replace('text-[var(--accent)]', 'text-[var(--text-muted)]');
+            document.getElementById('tab-users').classList.remove('border-b-2', 'border-[var(--accent)]');
+
+            document.getElementById(`${tab}-section`).classList.remove('hidden');
+            const activeTab = document.getElementById(`tab-${tab}`);
+            activeTab.classList.replace('text-[var(--text-muted)]', 'text-[var(--accent)]');
+            activeTab.classList.add('border-b-2', 'border-[var(--accent)]');
+        }
+
+        // File Input Logic
+        function updateFileName(input, labelId) {
+            if (input.files && input.files.length > 0) {
+                document.getElementById(labelId).textContent = input.files[0].name;
+                document.getElementById(labelId).classList.add('text-[var(--accent)]');
+            }
+        }
+
+        // --- BRANDING ---
+        async function loadBranding() {
+            try {
+                const res = await fetch('/api/settings');
+                currentSettings = await res.json();
+
+                // Update Form
+                document.getElementById('appName').value = currentSettings.appName || '';
+                document.getElementById('showAppName').checked = currentSettings.showAppName !== false;
+
+                // Update Navbar
+                const navAppName = document.getElementById('navAppName');
+                if (navAppName && currentSettings.appName) {
+                    navAppName.textContent = currentSettings.appName;
+                    document.title = `${currentSettings.appName} - Administración`;
+                }
+
+                if (navAppName) {
+                    if (currentSettings.showAppName === false) {
+                        navAppName.classList.add('hidden');
+                    } else {
+                        navAppName.classList.remove('hidden');
+                    }
+                }
+
+                // Update Logo
+                updateLogo();
+
+                // Favicon
+                if (currentSettings.favicon) {
+                    let link = document.querySelector("link[rel~='icon']");
+                    if (!link) {
+                        link = document.createElement('link');
+                        link.rel = 'icon';
+                        document.getElementsByTagName('head')[0].appendChild(link);
+                    }
+                    link.href = currentSettings.favicon;
+                }
+
+            } catch (e) {
+                console.error('Error loading settings', e);
+            }
+        }
+
+        document.getElementById('brandingForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            formData.set('showAppName', document.getElementById('showAppName').checked);
+
+            try {
+                const res = await fetch('/api/admin/settings', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+                if (res.ok) {
+                    showToast('Guardado', 'Configuración actualizada', 'success');
+                    loadBranding(); // Reload to update navbar immediately
+                } else {
+                    showToast('Error', 'No se pudo guardar', 'error');
+                }
+            } catch (e) {
+                showToast('Error', 'Error de conexión', 'error');
+            }
+        });
+
+        // --- USERS ---
+        async function loadUsers() {
+            try {
+                const res = await fetch('/api/admin/users', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error('Unauthorized');
+                const users = await res.json();
+                const tbody = document.getElementById('usersTableBody');
+                tbody.innerHTML = users.map(u => `
+                    <tr class="border-b border-[var(--border-color)] hover:bg-gray-50 dark:hover:bg-[#333] transition">
+                        <td class="py-3 px-4 text-sm font-mono text-[var(--text-muted)]">${u.id}</td>
+                        <td class="py-3 px-4 text-sm font-medium text-[var(--text-main)]">${u.email}</td>
+                        <td class="py-3 px-4 text-sm">
+                            <span class="px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${u.role === 'admin' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}">${u.role}</span>
+                        </td>
+                        <td class="py-3 px-4 text-right">
+                            <button onclick="deleteUser(${u.id})" class="text-[var(--text-muted)] hover:text-red-500 transition p-2">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+                lucide.createIcons();
+            } catch (e) {
+                console.error('Error loading users', e);
+            }
+        }
+
+        function openAddUserModal() {
+            const modal = document.getElementById('addUserModal');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modal.querySelector('div').classList.remove('scale-95');
+            }, 10);
+        }
+
+        function closeAddUserModal() {
+            const modal = document.getElementById('addUserModal');
+            modal.classList.add('opacity-0');
+            modal.querySelector('div').classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                document.getElementById('addUserForm').reset();
+            }, 300);
+        }
+
+        document.getElementById('addUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('newUserEmail').value;
+            const password = document.getElementById('newUserPassword').value;
+            const role = document.getElementById('newUserRole').value;
+
+            try {
+                const res = await fetch('/api/admin/users', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ email, password, role })
+                });
+
+                if (res.ok) {
+                    showToast('Usuario Creado', 'El usuario ha sido registrado', 'success');
+                    closeAddUserModal();
+                    loadUsers();
+                } else {
+                    const data = await res.json();
+                    showToast('Error', data.error || 'Error creando usuario', 'error');
+                }
+            } catch (e) {
+                showToast('Error', 'Error de conexión', 'error');
+            }
+        });
+
+        async function deleteUser(id) {
+            if (!confirm('¿Estás seguro de eliminar este usuario?')) return;
+
+            try {
+                const res = await fetch(`/api/admin/users/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    showToast('Eliminado', 'Usuario eliminado correctamente', 'success');
+                    loadUsers();
+                } else {
+                    showToast('Error', 'No se pudo eliminar', 'error');
+                }
+            } catch (e) {
+                showToast('Error', 'Error de conexión', 'error');
+            }
+        }
+
+        // User Menu Logic
+        const userMenuBtn = document.getElementById('userMenuBtn');
+        const userDropdown = document.getElementById('userDropdown');
+        const userMenuContainer = document.getElementById('userMenuContainer');
+
+        userMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            userDropdown.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!userMenuContainer.contains(e.target)) {
+                userDropdown.classList.add('hidden');
+            }
+        });
+
+        // Logout
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login.html';
+        }
+
+        // Init
+        loadBranding();
+        loadUsers();
+
+        // User Info
+        const user = JSON.parse(atob(token.split('.')[1]));
+        document.getElementById('userEmailDisplay').textContent = user.email;
+        document.getElementById('userRoleDisplay').textContent = user.role;
+
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>```

@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini PaaS Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+
+            /* Acento Rojizo para Modo Claro */
+            --accent: #dc2626;
+            /* Red 600 */
+            --accent-hover: #b91c1c;
+            /* Red 700 */
+            --accent-light: #fee2e2;
+            /* Red 100 */
+        }
+
+        /* Corregido: Nuevos tonos oscuros neutros */
+        body.dark {
+            --bg-color: #121212;
+            /* Fondo muy oscuro */
+            --card-bg: #222222;
+            /* Tarjetas gris oscuro */
+            --text-main: #e5e5e5;
+            --text-muted: #a3a3a3;
+            --border-color: #333333;
+
+            /* Acento Rojizo para Modo Oscuro */
+            --accent: #ef4444;
+            /* Red 500 */
+            --accent-hover: #f87171;
+            /* Red 400 */
+            --accent-light: rgba(239, 68, 68, 0.15);
+            /* Red 500 con opacidad baja */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            transition: background-color 0.3s, color 0.3s;
+            background-image: radial-gradient(var(--border-color) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        .app-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .app-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border-color: var(--accent);
+        }
+
+        .stat-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: transform 0.2s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+
+        /* Modal Transition */
+        .modal {
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease-in-out, visibility 0.2s;
+        }
+
+        .modal.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Loader */
+        .loader {
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 2px solid white;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+        }
+
+        /* Code Editor */
+        .code-editor {
+            font-family: 'Fira Code', monospace;
+            line-height: 1.5;
+            tab-size: 4;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav
+        class="border-b border-[var(--border-color)] bg-[var(--card-bg)] sticky top-0 z-10 transition-colors duration-300">
+        <div class="max-w-7xl mx-auto px-6 py-2.5 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <!-- Icono del Dashboard -->
+                <div id="navIconContainer" class="p-2 rounded-lg text-[var(--accent)]" style="background-color: var(--accent-light);">
+                    <i id="navIcon" data-lucide="layers" class="w-6 h-6"></i>
+                </div>
+                <img id="navLogo" src="" class="h-10 w-auto object-contain hidden">
+                <div>
+                    <h1 id="navAppName" class="text-lg font-bold tracking-tight leading-none">Mini PaaS</h1>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="themeToggle"
+                    class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#333] text-[var(--text-muted)] transition">
+                    <i data-lucide="moon" class="w-5 h-5 dark:hidden"></i>
+                    <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
+                </button>
+
+                <!-- User Menu -->
+                <div class="relative" id="userMenuContainer">
+                    <button id="userMenuBtn"
+                        class="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-[#333] transition flex items-center gap-2">
+                        <div
+                            class="w-9 h-9 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center text-[var(--text-main)] shadow-inner">
+                            <i data-lucide="user" class="w-5 h-5"></i>
+                        </div>
+                    </button>
+                    <div id="userDropdown"
+                        class="absolute right-0 mt-3 w-64 bg-[var(--card-bg)] rounded-2xl shadow-2xl border border-[var(--border-color)] hidden transform transition-all origin-top-right z-50 overflow-hidden">
+                        <div class="p-3">
+                            <div
+                                class="px-3 py-3 bg-slate-50 dark:bg-[#1a1a1a] rounded-xl mb-2 border border-[var(--border-color)]">
+                                <p class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">
+                                    Conectado como</p>
+                                <p class="text-sm font-semibold text-[var(--text-main)] truncate" id="userEmailDisplay">
+                                    Cargando...</p>
+                                <p class="text-xs text-[var(--accent)] font-medium mt-1 capitalize"
+                                    id="userRoleDisplay"></p>
+                            </div>
+                            <a href="/admin.html" id="adminLink"
+                                class="w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-gray-100 dark:hover:bg-[#333] transition flex items-center gap-3 hidden">
+                                <i data-lucide="shield" class="w-4 h-4"></i> Administración
+                            </a>
+                            <a href="/settings.html"
+                                class="w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-gray-100 dark:hover:bg-[#333] transition flex items-center gap-3">
+                                <i data-lucide="settings" class="w-4 h-4"></i> Configuración
+                            </a>
+                            <div class="h-px bg-[var(--border-color)] my-2 mx-1"></div>
+                            <button onclick="logout()"
+                                class="w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition flex items-center gap-3">
+                                <i data-lucide="log-out" class="w-4 h-4"></i> Cerrar Sesión
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-1 w-full max-w-7xl mx-auto px-6 py-8">
+
+        <!-- Breadcrumb & Title -->
+        <div class="mb-8">
+            <div class="flex items-center gap-2 text-sm text-[var(--text-muted)] mb-1">
+                <i data-lucide="home" class="w-4 h-4"></i>
+                <span>/</span>
+                <span class="font-medium text-[var(--text-main)]">Dashboard</span>
+            </div>
+            <h1 class="text-3xl font-bold text-[var(--text-main)]">Resumen General</h1>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            <div class="stat-card group">
+                <div class="p-3 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                    <i data-lucide="box" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-[var(--text-muted)]">Total Apps</p>
+                    <p class="text-2xl font-bold text-[var(--text-main)]" id="statTotal">0</p>
+                </div>
+            </div>
+            <div class="stat-card group">
+                <div class="p-3 rounded-xl bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400 group-hover:scale-110 transition-transform">
+                    <i data-lucide="activity" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-[var(--text-muted)]">En Ejecución</p>
+                    <p class="text-2xl font-bold text-[var(--text-main)]" id="statRunning">0</p>
+                </div>
+            </div>
+            <div class="stat-card group">
+                <div class="p-3 rounded-xl bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400 group-hover:scale-110 transition-transform">
+                    <i data-lucide="server-off" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-[var(--text-muted)]">Detenidas</p>
+                    <p class="text-2xl font-bold text-[var(--text-main)]" id="statStopped">0</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Header Section -->
+        <div class="flex flex-col md:flex-row justify-between items-end md:items-center mb-8 gap-4 border-b border-[var(--border-color)] pb-6">
+            <div>
+                <h2 class="text-2xl font-bold text-[var(--text-main)] flex items-center gap-2">
+                    <i data-lucide="grid" class="w-6 h-6 text-[var(--accent)]"></i>
+                    Tus Proyectos
+                </h2>
+                <p class="text-[var(--text-muted)] mt-1">Gestiona y monitorea tus aplicaciones desplegadas.</p>
+            </div>
+            <button onclick="openDeployModal()"
+                class="group flex items-center gap-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-5 py-2.5 rounded-xl shadow-lg shadow-red-500/20 transition-all active:scale-95 font-medium">
+                <i data-lucide="plus" class="w-5 h-5 group-hover:rotate-90 transition-transform"></i>
+                <span>Nuevo Despliegue</span>
+            </button>
+        </div>
+
+        <!-- Grid -->
+        <div id="appsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Cards injected JS -->
+        </div>
+
+    </main>
+
+    <!-- Deploy Modal -->
+    <div id="deployModal"
+        class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div
+            class="bg-[var(--card-bg)] w-full max-w-lg rounded-2xl shadow-2xl border border-[var(--border-color)] transform transition-all">
+            <div class="flex justify-between items-center p-6 border-b border-[var(--border-color)]">
+                <h3 class="text-xl font-semibold flex items-center gap-2 text-[var(--text-main)]">
+                    <i data-lucide="upload-cloud" class="w-5 h-5 text-[var(--accent)]"></i>
+                    Desplegar App
+                </h3>
+                <button onclick="closeDeployModal()" class="text-[var(--text-muted)] hover:text-[var(--text-main)]">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <form id="deployForm" class="p-6 space-y-6">
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-[var(--text-muted)]">Nombre del Proyecto</label>
+                    <div class="relative">
+                        <i data-lucide="tag"
+                            class="absolute left-3 top-3 w-5 h-5 text-[var(--text-muted)] opacity-70"></i>
+                        <input type="text" id="appName" required placeholder="mi-app-react"
+                            class="w-full pl-10 pr-4 py-3 rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition text-[var(--text-main)] placeholder-gray-500">
+                    </div>
+                </div>
+
+                <!-- Tabs -->
+                <div class="flex border-b border-[var(--border-color)] mb-4">
+                    <button type="button" id="tabZip" class="flex-1 pb-2 text-sm font-medium text-[var(--accent)] border-b-2 border-[var(--accent)] transition" onclick="switchDeployTab('zip')">Subir ZIP</button>
+                    <button type="button" id="tabGit" class="flex-1 pb-2 text-sm font-medium text-[var(--text-muted)] border-b-2 border-transparent hover:text-[var(--text-main)] transition" onclick="switchDeployTab('git')">Repositorio Git</button>
+                </div>
+
+                <!-- ZIP Section -->
+                <div id="deployZipSection">
+                    <label class="block text-sm font-medium mb-2 text-[var(--text-muted)]">Código Fuente (.zip)</label>
+                    <label
+                        class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-[var(--border-color)] rounded-xl cursor-pointer hover:border-[var(--accent)] hover:bg-red-50/50 dark:hover:bg-red-900/10 transition group">
+                        <div
+                            class="flex flex-col items-center justify-center pt-5 pb-6 text-[var(--text-muted)] group-hover:text-[var(--accent)]">
+                            <i data-lucide="file-archive" class="w-8 h-8 mb-2"></i>
+                            <p class="text-sm" id="fileName">Click para seleccionar ZIP</p>
+                        </div>
+                        <input type="file" id="zipFile" accept=".zip" class="hidden">
+                    </label>
+                </div>
+
+                <!-- Git Section -->
+                <div id="deployGitSection" class="hidden space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-[var(--text-muted)]">URL del Repositorio</label>
+                        <div class="relative">
+                            <i data-lucide="git-branch" class="absolute left-3 top-3 w-5 h-5 text-[var(--text-muted)] opacity-70"></i>
+                            <input type="url" id="gitUrl" placeholder="https://github.com/usuario/repo.git"
+                                class="w-full pl-10 pr-4 py-3 rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition text-[var(--text-main)] placeholder-gray-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-[var(--text-muted)]">Rama (Branch)</label>
+                        <input type="text" id="gitBranch" placeholder="main" value="main"
+                            class="w-full px-4 py-3 rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition text-[var(--text-main)] placeholder-gray-500">
+                    </div>
+                </div>
+
+                <div id="uploadStatus" class="text-sm text-center hidden"></div>
+
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeDeployModal()"
+                        class="flex-1 py-3 text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--bg-color)] rounded-xl transition border border-transparent hover:border-[var(--border-color)]">Cancelar</button>
+                    <button type="submit"
+                        class="flex-1 py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl font-medium shadow-lg shadow-red-500/20 transition flex justify-center items-center gap-2">
+                        <span>Desplegar</span>
+                        <div id="loadingSpinner" class="loader hidden"></div>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Logs Modal -->
+    <div id="logsModal"
+        class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div
+            class="bg-[var(--card-bg)] w-full max-w-4xl h-[80vh] rounded-2xl shadow-2xl border border-[var(--border-color)] flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b border-[var(--border-color)]">
+                <h3 class="font-semibold flex items-center gap-2 text-[var(--text-main)]">
+                    <i data-lucide="terminal" class="w-5 h-5"></i>
+                    Logs en Tiempo Real
+                </h3>
+                <div class="flex items-center gap-3">
+                    <span id="connectionStatus" class="text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-current"></span> Desconectado
+                    </span>
+                    <button onclick="closeLogs()" class="text-[var(--text-muted)] hover:text-red-500">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="flex-1 p-4 overflow-auto bg-[#0a0a0a] m-0">
+                <pre id="logsContent" class="font-mono text-xs md:text-sm text-green-400 whitespace-pre-wrap"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Env Vars Modal -->
+    <div id="envModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="bg-[var(--card-bg)] w-full max-w-2xl rounded-2xl shadow-2xl border border-[var(--border-color)] flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center p-6 border-b border-[var(--border-color)]">
+                <h3 class="text-xl font-semibold flex items-center gap-2 text-[var(--text-main)]">
+                    <i data-lucide="settings-2" class="w-5 h-5 text-[var(--accent)]"></i>
+                    Variables de Entorno
+                </h3>
+                <button onclick="closeEnvModal()" class="text-[var(--text-muted)] hover:text-[var(--text-main)]">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <p class="text-sm text-[var(--text-muted)] mb-4">Define las variables de entorno para tu aplicación. Se requiere reiniciar para aplicar cambios.</p>
+                <form id="envForm" class="space-y-4">
+                    <div id="envList" class="space-y-3">
+                        <!-- Env Rows injected here -->
+                    </div>
+                    <button type="button" onclick="addEnvRow()" class="text-sm text-[var(--accent)] hover:underline flex items-center gap-1 font-medium">
+                        <i data-lucide="plus" class="w-4 h-4"></i> Añadir Variable
+                    </button>
+                </form>
+            </div>
+            <div class="p-6 border-t border-[var(--border-color)] flex justify-end gap-3 bg-[var(--bg-color)] rounded-b-2xl">
+                <button onclick="closeEnvModal()" class="px-4 py-2 text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)]">Cancelar</button>
+                <button onclick="saveEnvVars()" class="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-sm font-medium shadow-lg shadow-red-500/20 transition">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Manager Modal -->
+    <div id="filesModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="bg-[var(--card-bg)] w-full max-w-6xl h-[85vh] rounded-2xl shadow-2xl border border-[var(--border-color)] flex flex-col overflow-hidden">
+            <div class="flex justify-between items-center p-4 border-b border-[var(--border-color)] bg-[var(--bg-color)]">
+                <div class="flex items-center gap-3">
+                    <h3 class="font-semibold flex items-center gap-2 text-[var(--text-main)]">
+                        <i data-lucide="folder-open" class="w-5 h-5 text-[var(--accent)]"></i>
+                        Explorador de Archivos
+                    </h3>
+                    <span id="currentFileName" class="text-sm text-[var(--text-muted)] font-mono bg-gray-200 dark:bg-gray-800 px-2 py-0.5 rounded hidden"></span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="saveCurrentFile()" id="saveFileBtn" class="hidden px-3 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-xs font-medium flex items-center gap-2 transition">
+                        <i data-lucide="save" class="w-3 h-3"></i> Guardar
+                    </button>
+                    <button onclick="closeFilesModal()" class="text-[var(--text-muted)] hover:text-[var(--text-main)] p-1">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="flex flex-1 overflow-hidden">
+                <!-- Sidebar -->
+                <div class="w-64 border-r border-[var(--border-color)] bg-[var(--bg-color)] flex flex-col">
+                    <div class="p-3 border-b border-[var(--border-color)]">
+                        <p class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">Archivos</p>
+                    </div>
+                    <div id="fileList" class="flex-1 overflow-y-auto p-2 space-y-1">
+                        <!-- File Tree -->
+                    </div>
+                </div>
+                <!-- Editor -->
+                <div class="flex-1 flex flex-col bg-[#1e1e1e]">
+                    <textarea id="fileEditor" class="flex-1 w-full h-full bg-[#1e1e1e] text-[#d4d4d4] p-4 font-mono text-sm resize-none focus:outline-none code-editor" spellcheck="false" placeholder="Selecciona un archivo para editar..."></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmationModal" class="modal fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="bg-[var(--card-bg)] w-full max-w-sm rounded-2xl shadow-2xl border border-[var(--border-color)] transform transition-all scale-100">
+            <div class="p-6 text-center">
+                <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mx-auto mb-4 text-red-600 dark:text-red-400">
+                    <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-lg font-bold text-[var(--text-main)] mb-2">¿Estás seguro?</h3>
+                <p id="confirmationMessage" class="text-sm text-[var(--text-muted)] mb-6">Esta acción no se puede deshacer.</p>
+                <div class="flex gap-3 justify-center">
+                    <button onclick="closeConfirmModal()" class="px-4 py-2 rounded-xl text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--bg-color)] transition border border-transparent hover:border-[var(--border-color)]">
+                        Cancelar
+                    </button>
+                    <button id="confirmActionBtn" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium shadow-lg shadow-red-500/20 transition">
+                        Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Confirmation Modal Logic
+        let confirmCallback = null;
+
+        function showConfirmModal(message, onConfirm) {
+            const modal = document.getElementById('confirmationModal');
+            const msgEl = document.getElementById('confirmationMessage');
+            const btn = document.getElementById('confirmActionBtn');
+
+            msgEl.textContent = message;
+            confirmCallback = onConfirm;
+
+            // Remove old listeners to prevent multiple firings
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+            
+            newBtn.addEventListener('click', () => {
+                if (confirmCallback) confirmCallback();
+                closeConfirmModal();
+            });
+
+            modal.classList.add('active');
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirmationModal').classList.remove('active');
+            confirmCallback = null;
+        }
+
+        // Auth Check
+        const token = localStorage.getItem('token');
+        if (!token) window.location.href = '/login.html';
+
+        // User Info Decode
+        let user = {};
+        try {
+            user = JSON.parse(atob(token.split('.')[1]));
+            document.getElementById('userEmailDisplay').textContent = user.email;
+            document.getElementById('userRoleDisplay').textContent = user.role;
+            if (user.role === 'admin') {
+                document.getElementById('adminLink').classList.remove('hidden');
+            }
+        } catch (e) {
+            localStorage.removeItem('token');
+            window.location.href = '/login.html';
+        }
+
+        // Detect Environment
+        const isDevEnvironment = window.location.protocol === 'file:' ||
+            window.location.protocol === 'blob:' ||
+            window.location.href.includes('blob:');
+        const API_BASE = isDevEnvironment ? 'http://localhost:5050' : '';
+        const API = `${API_BASE}/api/apps`;
+
+        // Socket.io Setup
+        let socket;
+        if (!isDevEnvironment) {
+            socket = io({
+                auth: { token }
+            });
+
+            socket.on('connect', () => {
+                console.log('Conectado a Socket.io');
+                document.getElementById('connectionStatus').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> Conectado';
+                document.getElementById('connectionStatus').className = "text-xs px-2 py-1 rounded-full bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400 flex items-center gap-1";
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Desconectado de Socket.io');
+                document.getElementById('connectionStatus').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-500"></span> Desconectado';
+                document.getElementById('connectionStatus').className = "text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400 flex items-center gap-1";
+            });
+
+            // Real-time Stats Update
+            socket.on('stats', (data) => {
+                // data: { appName: { cpu: '0.5', memory: '20' } }
+                Object.keys(data).forEach(appName => {
+                    const cpuEl = document.getElementById(`cpu-${appName}`);
+                    const memEl = document.getElementById(`mem-${appName}`);
+                    if (cpuEl) cpuEl.textContent = data[appName].cpu + '%';
+                    if (memEl) memEl.textContent = data[appName].memory + 'MB';
+                });
+            });
+        }
+
+        // State & UI Refs
+        const fileInput = document.getElementById('zipFile');
+        const fileNameLabel = document.getElementById('fileName');
+        let currentLogApp = null;
+
+        // Mock Data
+        function getMockApps() {
+            return [
+                { name: 'dashboard-analiticas', port: 5200, type: 'node', status: 'running', deployDate: new Date().toISOString() },
+                { name: 'landing-page-v2', port: 5201, type: 'static', status: 'stopped', deployDate: new Date(Date.now() - 86400000).toISOString() },
+                { name: 'api-microservice', port: 5202, type: 'node', status: 'running', deployDate: new Date(Date.now() - 172800000).toISOString() }
+            ];
+        }
+
+        // Theme Logic
+        const themeToggle = document.getElementById('themeToggle');
+        themeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark');
+            updateLogo();
+        });
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.body.classList.add('dark');
+        }
+
+        // User Menu Logic
+        const userMenuBtn = document.getElementById('userMenuBtn');
+        const userDropdown = document.getElementById('userDropdown');
+        const userMenuContainer = document.getElementById('userMenuContainer');
+
+        userMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            userDropdown.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!userMenuContainer.contains(e.target)) {
+                userDropdown.classList.add('hidden');
+            }
+        });
+
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login.html';
+        }
+
+        // Branding Logic
+        let currentSettings = {};
+        async function loadBranding() {
+            try {
+                const res = await fetch(`${API_BASE}/api/settings`);
+                currentSettings = await res.json();
+
+                // Update Navbar
+                const navAppName = document.getElementById('navAppName');
+                if (currentSettings.appName) {
+                    navAppName.textContent = currentSettings.appName;
+                    document.title = `${currentSettings.appName} - Dashboard`;
+                }
+
+                if (currentSettings.showAppName === false) {
+                    navAppName.classList.add('hidden');
+                }
+
+                updateLogo();
+
+                if (currentSettings.favicon) {
+                    let link = document.querySelector("link[rel~='icon']");
+                    if (!link) {
+                        link = document.createElement('link');
+                        link.rel = 'icon';
+                        document.getElementsByTagName('head')[0].appendChild(link);
+                    }
+                    link.href = currentSettings.favicon;
+                }
+
+            } catch (e) {
+                console.log('Usando branding por defecto');
+            }
+        }
+
+        function updateLogo() {
+            const navLogo = document.getElementById('navLogo');
+            const navIconContainer = document.getElementById('navIconContainer');
+            const isDark = document.body.classList.contains('dark');
+            const logoSrc = isDark ? (currentSettings.logoDark || currentSettings.logoLight) : currentSettings.logoLight;
+
+            if (logoSrc) {
+                navLogo.src = logoSrc;
+                navLogo.classList.remove('hidden');
+                navIconContainer.classList.add('hidden');
+            } else {
+                navLogo.classList.add('hidden');
+                navIconContainer.classList.remove('hidden');
+            }
+        }
+
+        // File UI
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                fileNameLabel.textContent = e.target.files[0].name;
+                fileNameLabel.parentElement.classList.add('text-[var(--accent)]');
+            }
+        });
+
+        // Modal Logic
+        let currentDeployMethod = 'zip';
+
+        function switchDeployTab(method) {
+            currentDeployMethod = method;
+            const tabZip = document.getElementById('tabZip');
+            const tabGit = document.getElementById('tabGit');
+            const secZip = document.getElementById('deployZipSection');
+            const secGit = document.getElementById('deployGitSection');
+            const zipInput = document.getElementById('zipFile');
+            const gitUrlInput = document.getElementById('gitUrl');
+
+            if (method === 'zip') {
+                tabZip.className = "flex-1 pb-2 text-sm font-medium text-[var(--accent)] border-b-2 border-[var(--accent)] transition";
+                tabGit.className = "flex-1 pb-2 text-sm font-medium text-[var(--text-muted)] border-b-2 border-transparent hover:text-[var(--text-main)] transition";
+                secZip.classList.remove('hidden');
+                secGit.classList.add('hidden');
+                zipInput.required = true;
+                gitUrlInput.required = false;
+            } else {
+                tabGit.className = "flex-1 pb-2 text-sm font-medium text-[var(--accent)] border-b-2 border-[var(--accent)] transition";
+                tabZip.className = "flex-1 pb-2 text-sm font-medium text-[var(--text-muted)] border-b-2 border-transparent hover:text-[var(--text-main)] transition";
+                secGit.classList.remove('hidden');
+                secZip.classList.add('hidden');
+                zipInput.required = false;
+                gitUrlInput.required = true;
+            }
+        }
+
+        function openDeployModal() {
+            document.getElementById('deployModal').classList.add('active');
+            switchDeployTab('zip');
+        }
+        function closeDeployModal() {
+            document.getElementById('deployModal').classList.remove('active');
+            document.getElementById('deployForm').reset();
+            fileNameLabel.textContent = "Click para seleccionar ZIP";
+            document.getElementById('uploadStatus').classList.add('hidden');
+            switchDeployTab('zip');
+        }
+
+        // Load Apps
+        async function loadApps() {
+            const grid = document.getElementById('appsGrid');
+            let apps = [];
+            let isMocking = false;
+
+            try {
+                const res = await fetch(API, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.status === 401) {
+                    logout();
+                    return;
+                }
+                if (!res.ok) throw new Error('Fail');
+                apps = await res.json();
+            } catch (error) {
+                if (isDevEnvironment) {
+                    isMocking = true;
+                    apps = getMockApps();
+                } else {
+                    grid.innerHTML = `<div class="col-span-full text-center py-12 text-red-500 bg-red-50 dark:bg-red-900/20 rounded-2xl">Error de conexión con el servidor MiniPaaS</div>`;
+                    return;
+                }
+            }
+
+            grid.innerHTML = '';
+
+            // Update Stats
+            document.getElementById('statTotal').textContent = apps.length;
+            document.getElementById('statRunning').textContent = apps.filter(a => a.status === 'running').length;
+            document.getElementById('statStopped').textContent = apps.filter(a => a.status !== 'running').length;
+
+            if (isMocking) {
+                const alert = document.createElement('div');
+                alert.className = 'col-span-full bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg text-sm flex items-center gap-2';
+                alert.innerHTML = `<i data-lucide="alert-circle" class="w-4 h-4"></i> <span><strong>Vista Previa:</strong> Mostrando datos de demostración.</span>`;
+                grid.appendChild(alert);
+                lucide.createIcons();
+            }
+
+            if (apps.length === 0) {
+                grid.innerHTML += `
+                    <div class="col-span-full flex flex-col items-center justify-center py-24 opacity-50 border-2 border-dashed border-[var(--border-color)] rounded-3xl">
+                        <i data-lucide="box" class="w-12 h-12 mb-4"></i>
+                        <p class="text-[var(--text-muted)]">No hay aplicaciones desplegadas</p>
+                    </div>`;
+                lucide.createIcons();
+                return;
+            }
+
+            apps.forEach(app => {
+                const host = window.location.hostname || 'localhost';
+                const displayHost = (host === '' || host === 'undefined') ? 'localhost' : host;
+                const url = `http://${displayHost}:${app.port}`;
+                const isRunning = app.status === 'running';
+
+                const card = document.createElement('div');
+                card.className = 'app-card rounded-2xl p-6 relative group';
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-6">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center ${app.type === 'node' ? 'bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'}">
+                                <i data-lucide="${app.type === 'node' ? 'server' : 'file-code'}" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-[var(--text-main)]">${app.name}</h3>
+                                <div class="flex items-center gap-1.5 mt-0.5">
+                                    <span class="w-2 h-2 rounded-full ${isRunning ? 'bg-green-500 animate-pulse' : 'bg-red-500'}"></span>
+                                    <span class="text-xs text-[var(--text-muted)] uppercase font-medium tracking-wide">${app.status}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                             <button onclick="deleteApp('${app.name}')" class="text-[var(--text-muted)] hover:text-red-500 p-2 transition" title="Eliminar">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3 mb-6">
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-[var(--text-muted)] flex items-center gap-2"><i data-lucide="globe" class="w-4 h-4"></i> Puerto</span>
+                            <span class="font-mono bg-gray-100 dark:bg-[#1a1a1a] border border-transparent dark:border-[#333] px-2 py-0.5 rounded text-[var(--text-main)]">${app.port}</span>
+                        </div>
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-[var(--text-muted)] flex items-center gap-2"><i data-lucide="cpu" class="w-4 h-4"></i> CPU</span>
+                            <span id="cpu-${app.name}" class="font-mono text-[var(--text-main)]">0%</span>
+                        </div>
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-[var(--text-muted)] flex items-center gap-2"><i data-lucide="hard-drive" class="w-4 h-4"></i> RAM</span>
+                            <span id="mem-${app.name}" class="font-mono text-[var(--text-main)]">0MB</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-4 gap-2 mt-auto">
+                        <button onclick="window.open('${url}', '_blank')" class="col-span-2 flex items-center justify-center gap-2 py-2 px-4 bg-[var(--text-main)] hover:bg-opacity-90 text-[var(--card-bg)] rounded-lg text-sm font-medium transition border border-transparent">
+                            <i data-lucide="external-link" class="w-4 h-4"></i> Abrir
+                        </button>
+                        <button onclick="restartApp('${app.name}')" class="flex items-center justify-center p-2 border border-[var(--border-color)] hover:bg-gray-50 dark:hover:bg-[#333] rounded-lg text-[var(--text-main)] transition" title="Reiniciar">
+                            <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="openEnvModal('${app.name}')" class="flex items-center justify-center p-2 border border-[var(--border-color)] hover:bg-gray-50 dark:hover:bg-[#333] rounded-lg text-[var(--text-main)] transition" title="Variables de Entorno">
+                            <i data-lucide="settings-2" class="w-4 h-4"></i>
+                        </button>
+                        
+                        <button onclick="viewLogs('${app.name}')" class="col-span-2 flex items-center justify-center gap-2 py-2 text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition mt-1 border border-[var(--border-color)] rounded-lg">
+                            <i data-lucide="terminal" class="w-3 h-3"></i> Logs
+                        </button>
+                        <button onclick="openFilesModal('${app.name}')" class="col-span-2 flex items-center justify-center gap-2 py-2 text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition mt-1 border border-[var(--border-color)] rounded-lg">
+                            <i data-lucide="folder-open" class="w-3 h-3"></i> Archivos
+                        </button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        // API Actions Wrapper
+        async function performAction(url, method = 'POST') {
+            if (isDevEnvironment) {
+                try {
+                    const res = await fetch(url, {
+                        method,
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (res.ok) return true;
+                    throw new Error('Mock');
+                } catch (e) {
+                    // Simulacion visual
+                    return true;
+                }
+            } else {
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.status === 401) {
+                    logout();
+                    return false;
+                }
+                return res.ok;
+            }
+        }
+
+        async function restartApp(name) {
+            showConfirmModal(`¿Reiniciar ${name}?`, async () => {
+                await performAction(`${API}/${name}/restart`);
+                loadApps();
+            });
+        }
+
+        async function deleteApp(name) {
+            showConfirmModal(`¿Borrar ${name} permanentemente?`, async () => {
+                await performAction(`${API}/${name}`, 'DELETE');
+                loadApps();
+            });
+        }
+
+        // Logs Logic
+        async function viewLogs(name) {
+            document.getElementById('logsModal').classList.add('active');
+            const content = document.getElementById('logsContent');
+            content.textContent = 'Cargando historial de logs...\n';
+            currentLogApp = name;
+
+            try {
+                const res = await fetch(`${API}/${name}/logs`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    content.textContent = data.logs || 'No hay logs previos.\n';
+                }
+            } catch (e) {
+                console.error(e);
+            }
+
+            content.textContent += '\n--- Conectado a tiempo real ---\n';
+            const container = content.parentElement;
+            container.scrollTop = container.scrollHeight;
+
+            if (socket) {
+                // Limpiar listeners anteriores
+                socket.off(`log:${name}`);
+                
+                // Escuchar nuevos logs
+                socket.on(`log:${name}`, (data) => {
+                    content.textContent += data;
+                    // Auto-scroll
+                    const container = content.parentElement;
+                    container.scrollTop = container.scrollHeight;
+                });
+            }
+        }
+
+        function closeLogs() {
+            document.getElementById('logsModal').classList.remove('active');
+            if (socket && currentLogApp) {
+                socket.off(`log:${currentLogApp}`);
+                currentLogApp = null;
+            }
+        }
+
+        // Upload Logic
+        document.getElementById('deployForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = e.target.querySelector('button[type="submit"]');
+            const spinner = document.getElementById('loadingSpinner');
+            const status = document.getElementById('uploadStatus');
+
+            btn.disabled = true;
+            spinner.classList.remove('hidden');
+            status.classList.remove('hidden');
+            status.textContent = currentDeployMethod === 'git' ? "Clonando repositorio..." : "Subiendo proyecto...";
+            status.className = "text-sm text-center text-[var(--accent)] animate-pulse";
+
+            const formData = new FormData();
+            formData.append('name', document.getElementById('appName').value);
+            
+            if (currentDeployMethod === 'zip') {
+                const file = document.getElementById('zipFile').files[0];
+                if (file) formData.append('zipFile', file);
+            } else {
+                formData.append('gitUrl', document.getElementById('gitUrl').value);
+                formData.append('branch', document.getElementById('gitBranch').value);
+            }
+
+            try {
+                const res = await fetch(API, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (res.status === 401) {
+                    logout();
+                    return;
+                }
+
+                if (!res.ok && !isDevEnvironment) throw new Error('Error en servidor');
+
+                // Simulación de éxito en entorno dev o real
+                setTimeout(() => {
+                    closeDeployModal();
+                    loadApps();
+                    btn.disabled = false;
+                    spinner.classList.add('hidden');
+                }, 1000);
+
+            } catch (err) {
+                if (isDevEnvironment) {
+                    setTimeout(() => { closeDeployModal(); loadApps(); btn.disabled = false; spinner.classList.add('hidden'); }, 1000);
+                } else {
+                    status.textContent = "Error al subir.";
+                    status.className = "text-sm text-center text-red-500";
+                    btn.disabled = false;
+                    spinner.classList.add('hidden');
+                }
+            }
+        });
+
+        // Env Vars Logic
+        let currentEnvApp = null;
+
+        async function openEnvModal(appName) {
+            currentEnvApp = appName;
+            document.getElementById('envModal').classList.add('active');
+            const list = document.getElementById('envList');
+            list.innerHTML = '<div class="text-center py-4 text-[var(--text-muted)]">Cargando variables...</div>';
+
+            try {
+                const res = await fetch(`${API}/${appName}/env`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (res.status === 401) { logout(); return; }
+                
+                const envVars = await res.json(); // { KEY: "VAL", ... }
+                list.innerHTML = '';
+                
+                Object.entries(envVars).forEach(([key, value]) => {
+                    addEnvRow(key, value);
+                });
+                
+                if (Object.keys(envVars).length === 0) {
+                    // Añadir una fila vacía si no hay vars
+                    addEnvRow();
+                }
+
+            } catch (e) {
+                list.innerHTML = '<div class="text-center py-4 text-red-500">Error al cargar variables</div>';
+            }
+        }
+
+        function closeEnvModal() {
+            document.getElementById('envModal').classList.remove('active');
+            currentEnvApp = null;
+        }
+
+        function addEnvRow(key = '', value = '') {
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-2';
+
+            row.innerHTML = `
+                <input type="text" value="${key}" class="flex-1 px-3 py-2 text-sm rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition text-[var(--text-main)]" placeholder="NOMBRE_VARIABLE">
+                <input type="text" value="${value}" class="flex-1 px-3 py-2 text-sm rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition text-[var(--text-main)]" placeholder="valor">
+                <button type="button" onclick="removeEnvRow(this)" class="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+            `;
+
+            document.getElementById('envList').appendChild(row);
+        }
+
+        function removeEnvRow(button) {
+            button.closest('div').remove();
+        }
+
+        async function saveEnvVars() {
+            if (!currentEnvApp) return;
+            
+            const rows = document.querySelectorAll('#envList > div');
+            const envVars = {};
+
+            rows.forEach(row => {
+                const inputs = row.querySelectorAll('input[type="text"]');
+                const key = inputs[0].value.trim();
+                const value = inputs[1].value.trim();
+                if (key) {
+                    envVars[key] = value;
+                }
+            });
+
+            try {
+                const res = await fetch(`${API}/${currentEnvApp}/env`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(envVars)
+                });
+
+                if (res.status === 401) { logout(); return; }
+                if (!res.ok) throw new Error('Error al guardar');
+
+                closeEnvModal();
+                alert('Variables guardadas. Reinicia la aplicación para aplicar los cambios.');
+            } catch (e) {
+                alert('Error al guardar variables.');
+            }
+        }
+
+        // File Manager Logic
+        let currentFileApp = null;
+        let currentFilePath = '';
+
+        function openFilesModal(appName) {
+            currentFileApp = appName;
+            currentFilePath = '';
+            document.getElementById('filesModal').classList.add('active');
+            loadFileTree(appName);
+        }
+
+        function closeFilesModal() {
+            document.getElementById('filesModal').classList.remove('active');
+            currentFileApp = null;
+            currentFilePath = '';
+            document.getElementById('fileEditor').value = '';
+            document.getElementById('saveFileBtn').classList.add('hidden');
+            document.getElementById('currentFileName').classList.add('hidden');
+        }
+
+        async function loadFileTree(appName, path = '') {
+            currentFilePath = path;
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = '<div class="animate-pulse text-center py-4 text-[var(--text-muted)]">Cargando archivos...</div>';
+
+            try {
+                const res = await fetch(`${API}/${appName}/files?path=${encodeURIComponent(path)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (res.status === 401) { logout(); return; }
+                if (!res.ok) throw new Error('Error');
+
+                const files = await res.json();
+                fileList.innerHTML = '';
+
+                // Add "Go Up" button if not in root
+                if (path) {
+                    const upDiv = document.createElement('div');
+                    upDiv.className = 'text-sm text-[var(--text-muted)] flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-[#333] transition mb-1';
+                    upDiv.innerHTML = `<i data-lucide="corner-left-up" class="w-4 h-4"></i> <span>..</span>`;
+                    const parentPath = path.split('/').slice(0, -1).join('/');
+                    upDiv.onclick = () => loadFileTree(appName, parentPath);
+                    fileList.appendChild(upDiv);
+                }
+
+                if (files.length === 0) {
+                    fileList.innerHTML += '<div class="text-center py-4 text-[var(--text-muted)] text-xs">Carpeta vacía</div>';
+                    lucide.createIcons();
+                    return;
+                }
+
+                // Simple sort: folders first
+                files.sort((a, b) => {
+                    if (a.isDirectory === b.isDirectory) return a.name.localeCompare(b.name);
+                    return a.isDirectory ? -1 : 1;
+                });
+
+                files.forEach(file => {
+                    const div = document.createElement('div');
+                    div.className = 'text-sm text-[var(--text-main)] flex items-center justify-between py-2 px-3 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-[#333] transition group';
+                    
+                    const icon = file.isDirectory ? 'folder' : 'file-code';
+                    const fullPath = file.path; // Server returns relative path from app root
+                    
+                    // Click action: Enter folder OR Open file
+                    div.onclick = (e) => {
+                        // Prevent triggering if clicking action buttons
+                        if (e.target.closest('button')) return;
+                        
+                        if (file.isDirectory) {
+                            loadFileTree(appName, fullPath);
+                        } else {
+                            openFileEditor(fullPath);
+                        }
+                    };
+
+                    div.innerHTML = `
+                        <div class="flex items-center gap-2 truncate">
+                            <i data-lucide="${icon}" class="w-4 h-4 ${file.isDirectory ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}"></i>
+                            <span class="font-medium truncate">${file.name}</span>
+                        </div>
+                    `;
+                    
+                    fileList.appendChild(div);
+                });
+
+                lucide.createIcons();
+            } catch (e) {
+                console.error(e);
+                fileList.innerHTML = '<div class="text-red-500 text-center py-4 text-xs">Error al cargar</div>';
+            }
+        }
+
+        async function openFileEditor(filePath) {
+            if (!currentFileApp) return;
+            
+            const editor = document.getElementById('fileEditor');
+            const saveBtn = document.getElementById('saveFileBtn');
+            const nameLabel = document.getElementById('currentFileName');
+
+            editor.value = 'Cargando...';
+            editor.disabled = true;
+            
+            try {
+                const res = await fetch(`${API}/${currentFileApp}/files/content?path=${encodeURIComponent(filePath)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (res.status === 401) { logout(); return; }
+                if (!res.ok) throw new Error('Error');
+                
+                const data = await res.json();
+                editor.value = data.content;
+                editor.disabled = false;
+                editor.dataset.filePath = filePath; // Store full path
+                
+                nameLabel.textContent = filePath;
+                nameLabel.classList.remove('hidden');
+                saveBtn.classList.remove('hidden');
+
+            } catch (e) {
+                editor.value = 'Error al leer el archivo.';
+            }
+        }
+
+        async function saveCurrentFile() {
+            const editor = document.getElementById('fileEditor');
+            const filePath = editor.dataset.filePath;
+            
+            if (!currentFileApp || !filePath) return;
+
+            const btn = document.getElementById('saveFileBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<div class="loader w-3 h-3 border-white"></div> Guardando...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`${API}/${currentFileApp}/files/content`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        path: filePath,
+                        content: editor.value
+                    })
+                });
+
+                if (res.status === 401) { logout(); return; }
+                if (!res.ok) throw new Error('Error');
+
+                // Feedback visual
+                btn.innerHTML = '<i data-lucide="check" class="w-3 h-3"></i> Guardado';
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }, 2000);
+
+            } catch (e) {
+                alert('Error al guardar archivo.');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // Confirmation Modal Logic
+        function openConfirmModal(message, onConfirm) {
+            document.getElementById('confirmationMessage').textContent = message;
+            document.getElementById('confirmActionBtn').onclick = onConfirm;
+            document.getElementById('confirmationModal').classList.add('active');
+        }
+
+        // Init
+        loadBranding();
+        loadApps();
+        setInterval(loadApps, 10000);
+
+    </script>
+</body>
+
+</html>

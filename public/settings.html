@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuración - Mini PaaS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+
+            /* Acento Rojizo para Modo Claro */
+            --accent: #dc2626;
+            /* Red 600 */
+            --accent-hover: #b91c1c;
+            /* Red 700 */
+            --accent-light: #fee2e2;
+            /* Red 100 */
+        }
+
+        /* Corregido: Nuevos tonos oscuros neutros */
+        body.dark {
+            --bg-color: #121212;
+            /* Fondo muy oscuro */
+            --card-bg: #222222;
+            /* Tarjetas gris oscuro */
+            --text-main: #e5e5e5;
+            --text-muted: #a3a3a3;
+            --border-color: #333333;
+
+            /* Acento Rojizo para Modo Oscuro */
+            --accent: #ef4444;
+            /* Red 500 */
+            --accent-hover: #f87171;
+            /* Red 400 */
+            --accent-light: rgba(239, 68, 68, 0.15);
+            /* Red 500 con opacidad baja */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .toast {
+            transform: translateY(100%);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav
+        class="border-b border-[var(--border-color)] bg-[var(--card-bg)] sticky top-0 z-10 transition-colors duration-300">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <a href="/" class="flex items-center gap-3 hover:opacity-80 transition">
+                    <div class="p-2.5 rounded-2xl text-[var(--accent)]" style="background-color: var(--accent-light);">
+                        <i data-lucide="layers" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold tracking-tight leading-none">Mini PaaS</h1>
+                        <span class="text-xs text-[var(--text-muted)] font-medium">Configuración</span>
+                    </div>
+                </a>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <button id="themeToggle"
+                    class="p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-[#333] text-[var(--text-muted)] transition">
+                    <i data-lucide="moon" class="w-5 h-5 dark:hidden"></i>
+                    <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
+                </button>
+
+                <!-- User Menu -->
+                <div class="relative" id="userMenuContainer">
+                    <button id="userMenuBtn"
+                        class="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-[#333] transition flex items-center gap-2">
+                        <div
+                            class="w-9 h-9 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center text-[var(--text-main)] shadow-inner">
+                            <i data-lucide="user" class="w-5 h-5"></i>
+                        </div>
+                    </button>
+                    <div id="userDropdown"
+                        class="absolute right-0 mt-3 w-64 bg-[var(--card-bg)] rounded-2xl shadow-2xl border border-[var(--border-color)] hidden transform transition-all origin-top-right z-50 overflow-hidden">
+                        <div class="p-3">
+                            <div
+                                class="px-3 py-3 bg-slate-50 dark:bg-[#1a1a1a] rounded-xl mb-2 border border-[var(--border-color)]">
+                                <p class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">
+                                    Conectado como</p>
+                                <p class="text-sm font-semibold text-[var(--text-main)] truncate" id="userEmailDisplay">
+                                    Cargando...</p>
+                                <p class="text-xs text-[var(--accent)] font-medium mt-1 capitalize"
+                                    id="userRoleDisplay"></p>
+                            </div>
+                            <a href="/"
+                                class="w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-gray-100 dark:hover:bg-[#333] transition flex items-center gap-3">
+                                <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard
+                            </a>
+                            <a href="/admin.html" id="adminBtn"
+                                class="hidden w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-gray-100 dark:hover:bg-[#333] transition flex items-center gap-3">
+                                <i data-lucide="shield" class="w-4 h-4"></i> Administración
+                            </a>
+                            <div class="h-px bg-[var(--border-color)] my-2 mx-1"></div>
+                            <button onclick="logout()"
+                                class="w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition flex items-center gap-3">
+                                <i data-lucide="log-out" class="w-4 h-4"></i> Cerrar Sesión
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-1 w-full max-w-3xl mx-auto px-6 py-12">
+        <div class="mb-8">
+            <h2 class="text-2xl font-bold tracking-tight">Perfil de Usuario</h2>
+            <p class="text-[var(--text-muted)]">Administra tu información personal y seguridad</p>
+        </div>
+
+        <div class="bg-[var(--card-bg)] rounded-[2.5rem] border border-[var(--border-color)] p-8 shadow-sm">
+            <form id="profileForm" class="space-y-6">
+                <div>
+                    <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Correo Electrónico</label>
+                    <input type="email" id="profileEmail" disabled
+                        class="w-full p-3 rounded-3xl bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-muted)] cursor-not-allowed font-mono text-sm">
+                    <p class="text-xs text-[var(--text-muted)] mt-2 ml-1">El correo no se puede cambiar.</p>
+                </div>
+
+                <div class="h-px bg-[var(--border-color)] my-6"></div>
+
+                <h3 class="text-lg font-bold mb-4">Cambiar Contraseña</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Contraseña Actual</label>
+                        <input type="password" name="currentPassword" required
+                            class="w-full p-3 rounded-3xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:ring-2 focus:ring-[var(--accent)] outline-none transition">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Nueva Contraseña</label>
+                        <input type="password" name="newPassword" required
+                            class="w-full p-3 rounded-3xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:ring-2 focus:ring-[var(--accent)] outline-none transition">
+                    </div>
+                </div>
+
+                <div class="pt-4 flex justify-end">
+                    <button type="submit"
+                        class="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-8 py-3 rounded-3xl font-bold shadow-lg shadow-red-500/20 transition flex items-center gap-2">
+                        <i data-lucide="save" class="w-5 h-5"></i> Guardar Cambios
+                    </button>
+                </div>
+            </form>
+        </div>
+    </main>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 toast">
+        <div
+            class="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl p-4 flex items-start gap-4 max-w-sm">
+            <div id="toastIcon"></div>
+            <div>
+                <h4 id="toastTitle" class="font-bold text-sm"></h4>
+                <p id="toastMessage" class="text-sm text-[var(--text-muted)] mt-1"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auth Check
+        const token = localStorage.getItem('token');
+        if (!token) window.location.href = '/login.html';
+
+        // Theme Logic
+        const themeToggle = document.getElementById('themeToggle');
+        themeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark');
+        });
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.body.classList.add('dark');
+        }
+
+        // Logout
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login.html';
+        }
+
+        // Toast Logic
+        function showToast(title, message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastIcon = document.getElementById('toastIcon');
+            const toastTitle = document.getElementById('toastTitle');
+            const toastMessage = document.getElementById('toastMessage');
+
+            toastTitle.textContent = title;
+            toastMessage.textContent = message;
+
+            if (type === 'success') {
+                toastIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400';
+                toastIcon.innerHTML = '<i data-lucide="check" class="w-5 h-5"></i>';
+            } else if (type === 'error') {
+                toastIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400';
+                toastIcon.innerHTML = '<i data-lucide="alert-circle" class="w-5 h-5"></i>';
+            }
+
+            lucide.createIcons();
+            toast.classList.add('show');
+            setTimeout(() => { toast.classList.remove('show'); }, 4000);
+        }
+
+        // --- PROFILE ---
+        async function loadProfile() {
+            if (token) {
+                try {
+                    const base64Url = token.split('.')[1];
+                    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                    const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function (c) {
+                        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                    }).join(''));
+                    const payload = JSON.parse(jsonPayload);
+
+                    document.getElementById('profileEmail').value = payload.email || '';
+
+                    // Update User Menu
+                    const emailDisplay = document.getElementById('userEmailDisplay');
+                    const roleDisplay = document.getElementById('userRoleDisplay');
+
+                    if (emailDisplay) emailDisplay.textContent = payload.email || 'Usuario';
+                    if (roleDisplay) roleDisplay.textContent = payload.role || 'User';
+
+                    if (payload.role === 'admin') {
+                        const adminBtn = document.getElementById('adminBtn');
+                        if (adminBtn) adminBtn.classList.remove('hidden');
+                    }
+                } catch (e) {
+                    console.error('Error parsing token', e);
+                }
+            }
+        }
+
+        document.getElementById('profileForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+
+            try {
+                const res = await fetch('/api/auth/profile', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (res.ok) {
+                    showToast('Perfil Actualizado', 'Tu contraseña ha sido modificada', 'success');
+                    e.target.reset();
+                } else {
+                    const err = await res.json();
+                    showToast('Error', err.error || 'No se pudo actualizar', 'error');
+                }
+            } catch (e) {
+                showToast('Error', 'Error de conexión', 'error');
+            }
+        });
+
+        // User Menu Logic
+        const userMenuBtn = document.getElementById('userMenuBtn');
+        const userDropdown = document.getElementById('userDropdown');
+        const userMenuContainer = document.getElementById('userMenuContainer');
+
+        userMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            userDropdown.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!userMenuContainer.contains(e.target)) {
+                userDropdown.classList.add('hidden');
+            }
+        });
+
+        // Init
+        loadProfile();
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>

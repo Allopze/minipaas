@@ -1,0 +1,10 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+backups/*
+logs/*
+temp_uploads/*
+# Ignoramos data y apps locales para no sobrescribir los del volumen en producción
+data/*
+apps/*

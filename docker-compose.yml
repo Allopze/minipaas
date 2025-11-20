@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  minipaas:
+    build: .
+    container_name: minipaas
+    restart: unless-stopped
+    # IMPORTANTE: Usamos 'host' para que las aplicaciones desplegadas en puertos dinámicos (5200, 5201...)
+    # sean accesibles directamente desde la IP del servidor sin necesidad de mapear rangos de puertos gigantes.
+    # Esto funciona nativamente en Linux (Ubuntu).
+    network_mode: host
+    
+    environment:
+      - NODE_ENV=production
+      # Si necesitas definir secretos, hazlo aquí
+      # - JWT_SECRET=tu_secreto_super_seguro
+    
+    volumes:
+      # Persistencia de datos
+      - ./data:/app/data
+      - ./apps:/app/apps
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+      - ./public/uploads:/app/public/uploads
+      
+    # Configuración de logs para el contenedor principal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
