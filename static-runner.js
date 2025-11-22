@@ -17,7 +17,7 @@ const app = express();
 app.use(express.static(APP_PATH));
 
 // Fallback para SPAs (Single Page Applications) si no encuentra archivo
-app.get('*', (req, res) => {
+app.get(/(.*)/, (req, res) => {
     const indexPath = path.join(APP_PATH, 'index.html');
     if (require('fs').existsSync(indexPath)) {
         res.sendFile(indexPath);
