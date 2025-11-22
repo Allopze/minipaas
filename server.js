@@ -913,8 +913,27 @@ setInterval(() => {
     });
 }, 60 * 1000);
 
+// --- PATH CORRECTION ---
+const sanitizeAppPaths = () => {
+    const apps = getApps();
+    let changed = false;
+    apps.forEach(app => {
+        // If path is missing or doesn't exist, try to find it in APPS_DIR
+        if (!app.path || !fs.existsSync(app.path)) {
+            const candidate = path.join(APPS_DIR, app.name);
+            if (fs.existsSync(candidate)) {
+                console.log(`[SYSTEM] Auto-correcting path for ${app.name}: ${app.path} => ${candidate}`);
+                app.path = candidate;
+                changed = true;
+            }
+        }
+    });
+    if (changed) saveApps(apps);
+};
+
 // --- SERVER STARTUP ---
 const init = () => {
+    sanitizeAppPaths(); // Fix paths before starting
     const apps = getApps();
     console.log(`[SYSTEM] MiniPaaS started. ${apps.length} apps loaded.`);
     apps.forEach(startAppProcess);
