@@ -49,7 +49,7 @@
 
                 <div id="titleContainer">
                     <h1 id="loginTitle" class="text-2xl font-bold text-white tracking-tight">Bienvenido</h1>
-                    <p class="text-slate-400 text-sm mt-1">Plataforma de Despliegue</p>
+                    <p class="text-slate-400 text-sm mt-1">Acceso al sistema</p>
                 </div>
             </div>
         </div>
@@ -137,9 +137,6 @@
                 if (settings.appName) {
                     document.title = `Login - ${settings.appName}`;
                     document.getElementById('loginTitle').textContent = settings.appName;
-                } else {
-                    // Hide title if not set
-                    document.getElementById('loginTitle').style.display = 'none';
                 }
 
                 if (settings.logoDark) { // Use dark logo for dark header background
