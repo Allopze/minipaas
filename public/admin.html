@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Administración - Mini PaaS</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -432,6 +433,11 @@
                 const res = await fetch('/api/admin/users', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                if (res.status === 401 || res.status === 403) {
+                    showToast('Sin permiso', 'Debes ser administrador para ver usuarios', 'error');
+                    logout();
+                    return;
+                }
                 if (!res.ok) throw new Error('Unauthorized');
                 const users = await res.json();
                 const tbody = document.getElementById('usersTableBody');
@@ -545,16 +551,19 @@
         }
 
         // Init
-        loadBranding();
-        loadUsers();
-
-        // User Info
         const user = JSON.parse(atob(token.split('.')[1]));
-        document.getElementById('userEmailDisplay').textContent = user.email;
-        document.getElementById('userRoleDisplay').textContent = user.role;
+        if (user.role !== 'admin') {
+            showToast('Acceso restringido', 'Solo administradores pueden acceder a esta página', 'error');
+            logout();
+        } else {
+            loadBranding();
+            loadUsers();
+            document.getElementById('userEmailDisplay').textContent = user.email;
+            document.getElementById('userRoleDisplay').textContent = user.role;
+        }
 
         lucide.createIcons();
     </script>
 </body>
 
-</html>```
+</html>

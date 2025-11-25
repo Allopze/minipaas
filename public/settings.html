@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Configuración - Mini PaaS</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -259,7 +260,20 @@
         document.getElementById('profileForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData.entries());
+            const data = {
+                currentPassword: formData.get('currentPassword'),
+                newPassword: formData.get('newPassword')
+            };
+
+            if (!data.currentPassword || !data.newPassword) {
+                showToast('Error', 'Completa todos los campos', 'error');
+                return;
+            }
+
+            if (data.newPassword.length < 6) {
+                showToast('Error', 'La nueva contraseña debe tener al menos 6 caracteres', 'error');
+                return;
+            }
 
             try {
                 const res = await fetch('/api/auth/profile', {

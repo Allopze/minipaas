@@ -16,6 +16,7 @@ const pidusage = require('pidusage');
 const dotenv = require('dotenv');
 const rateLimit = require('express-rate-limit');
 const simpleGit = require('simple-git');
+const crypto = require('crypto');
 
 dotenv.config();
 
@@ -39,6 +40,19 @@ const SQLITE_FILE = path.join(DATA_DIR, 'database.sqlite');
 const STATIC_RUNNER = path.join(BASE_DIR, 'static-runner.js');
 const UPLOADS_DIR = path.join(BASE_DIR, 'public', 'uploads', 'branding');
 
+// Auto-restart configuration
+const AUTO_RESTART_MAX = Number(process.env.AUTO_RESTART_MAX) || 3;
+const AUTO_RESTART_WINDOW = Number(process.env.AUTO_RESTART_WINDOW) || 300; // seconds
+
+// Log rotation configuration
+const LOG_MAX_SIZE_MB = Number(process.env.LOG_MAX_SIZE_MB) || 10;
+const LOG_MAX_FILES = Number(process.env.LOG_MAX_FILES) || 5;
+
+// CORS configuration
+const CORS_ORIGINS = process.env.CORS_ORIGINS 
+    ? process.env.CORS_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
+    : [];
+
 // Ensure required directories exist
 [APPS_DIR, DATA_DIR, LOGS_DIR, BACKUPS_DIR, UPLOADS_DIR].forEach(dir => {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -56,25 +70,74 @@ db.serialize(() => {
   )`);
 });
 
+// Configure CORS (must be defined before Socket.IO initialization)
+const corsOptions = {
+    origin: (origin, callback) => {
+        // Allow requests with no origin (mobile apps, curl, etc)
+        if (!origin) return callback(null, true);
+        // If CORS_ORIGINS is empty, allow localhost variations
+        if (CORS_ORIGINS.length === 0) {
+            const localhostPattern = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+            if (localhostPattern.test(origin)) return callback(null, true);
+        }
+        // Check against allowed origins
+        if (CORS_ORIGINS.includes(origin) || CORS_ORIGINS.includes('*')) {
+            return callback(null, true);
+        }
+        callback(new Error('CORS not allowed'));
+    },
+    credentials: true
+};
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: { origin: "*" }
+    cors: corsOptions
 });
 
-const upload = multer({ dest: path.join(BASE_DIR, 'temp_uploads') });
+// Socket.IO authentication middleware
+io.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+    if (!token) {
+        return next(new Error('Authentication required'));
+    }
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) {
+            return next(new Error('Invalid token'));
+        }
+        socket.user = user;
+        next();
+    });
+});
+
+const upload = multer({ 
+    dest: path.join(BASE_DIR, 'temp_uploads'),
+    limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
+});
 const brandingUpload = multer({
     storage: multer.diskStorage({
         destination: (req, file, cb) => cb(null, UPLOADS_DIR),
         filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
-    })
+    }),
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit for branding files
 });
 
 // In‑memory map of running processes
 const runningProcesses = {};
 
-app.use(cors());
-app.use(express.json());
+// In-memory map of log streams (to close them properly)
+const logStreams = {};
+
+// In-memory map of restart counts for auto-restart policy
+const restartCounts = {};
+
+app.use(cors(corsOptions));
+// Capture raw JSON body for webhook signature validation
+app.use(express.json({
+    verify: (req, res, buf) => {
+        req.rawBody = buf;
+    }
+}));
 app.use(express.static(path.join(BASE_DIR, 'public')));
 
 // --- UTILITIES ---
@@ -131,15 +194,115 @@ const findAvailablePort = async startAt => {
     return port;
 };
 
-// Simple logger per app
+// Calculate directory size in bytes (skips symlinks)
+const calculateDirSize = async dir => {
+    try {
+        const stats = await fs.promises.stat(dir);
+        if (!stats.isDirectory()) return stats.size;
+
+        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+        let total = 0;
+        for (const entry of entries) {
+            if (entry.isSymbolicLink()) continue;
+            const fullPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+                total += await calculateDirSize(fullPath);
+            } else {
+                const fileStats = await fs.promises.stat(fullPath);
+                total += fileStats.size;
+            }
+        }
+        return total;
+    } catch (e) {
+        return 0;
+    }
+};
+
+// Simple logger per app with rotation
 const getLogStream = appName => {
     const logPath = path.join(LOGS_DIR, `${appName}.log`);
-    return fs.createWriteStream(logPath, { flags: 'a' });
+    
+    // Check if we need to rotate
+    if (fs.existsSync(logPath)) {
+        const stats = fs.statSync(logPath);
+        const sizeMB = stats.size / (1024 * 1024);
+        if (sizeMB >= LOG_MAX_SIZE_MB) {
+            rotateLog(appName);
+        }
+    }
+    
+    const stream = fs.createWriteStream(logPath, { flags: 'a' });
+    logStreams[appName] = stream;
+    return stream;
+};
+
+// Rotate log files
+const rotateLog = (appName) => {
+    const basePath = path.join(LOGS_DIR, `${appName}.log`);
+    
+    // Remove oldest if at max
+    const oldestPath = `${basePath}.${LOG_MAX_FILES}`;
+    if (fs.existsSync(oldestPath)) {
+        fs.unlinkSync(oldestPath);
+    }
+    
+    // Rotate existing logs
+    for (let i = LOG_MAX_FILES - 1; i >= 1; i--) {
+        const oldPath = i === 1 ? basePath : `${basePath}.${i}`;
+        const newPath = `${basePath}.${i + 1}`;
+        if (fs.existsSync(oldPath)) {
+            fs.renameSync(oldPath, newPath);
+        }
+    }
+    
+    console.log(`[SYSTEM] Rotated logs for ${appName}`);
+};
+
+// Close log stream for an app
+const closeLogStream = (appName) => {
+    if (logStreams[appName]) {
+        logStreams[appName].end();
+        delete logStreams[appName];
+    }
+};
+
+// Clean old logs on startup
+const cleanOldLogs = () => {
+    try {
+        const files = fs.readdirSync(LOGS_DIR);
+        const logGroups = {};
+        
+        files.forEach(file => {
+            const match = file.match(/^(.+)\.log(\.\d+)?$/);
+            if (match) {
+                const appName = match[1];
+                if (!logGroups[appName]) logGroups[appName] = [];
+                logGroups[appName].push(file);
+            }
+        });
+        
+        // Remove logs for apps that no longer exist
+        const apps = getApps();
+        const appNames = apps.map(a => a.name);
+        Object.keys(logGroups).forEach(name => {
+            if (!appNames.includes(name)) {
+                logGroups[name].forEach(file => {
+                    fs.unlinkSync(path.join(LOGS_DIR, file));
+                    console.log(`[SYSTEM] Removed orphan log: ${file}`);
+                });
+            }
+        });
+    } catch (e) {
+        console.error('[SYSTEM] Error cleaning logs:', e);
+    }
 };
 
 // Start an application (static or node)
-const startAppProcess = appData => {
+const startAppProcess = (appData, isRestart = false) => {
     const { name, port, type, path: appPath, env = {} } = appData;
+    
+    // Close existing log stream if any
+    closeLogStream(name);
     const logStream = getLogStream(name);
     console.log(`[SYSTEM] Starting ${name} (${type}) on port ${port}`);
 
@@ -149,6 +312,7 @@ const startAppProcess = appData => {
     if (!fs.existsSync(appPath)) {
         console.error(`[SYSTEM] Error: App directory ${appPath} does not exist. Skipping ${name}.`);
         updateAppStatus(name, 'stopped');
+        closeLogStream(name);
         return;
     }
 
@@ -207,22 +371,61 @@ const startAppProcess = appData => {
 
     child.on('close', code => {
         logStream.write(`[SYSTEM] Process exited with code ${code}\n`);
+        closeLogStream(name);
         delete runningProcesses[name];
         updateAppStatus(name, 'stopped');
         io.emit(`status:${name}`, 'stopped');
+        
+        // Auto-restart logic if process crashed (non-zero exit)
+        if (code !== 0 && code !== null) {
+            const apps = getApps();
+            const app = apps.find(a => a.name === name);
+            if (app && app.autoRestart !== false) {
+                const now = Date.now();
+                if (!restartCounts[name]) {
+                    restartCounts[name] = { count: 0, firstRestart: now };
+                }
+                
+                // Reset counter if outside window
+                if (now - restartCounts[name].firstRestart > AUTO_RESTART_WINDOW * 1000) {
+                    restartCounts[name] = { count: 0, firstRestart: now };
+                }
+                
+                if (restartCounts[name].count < AUTO_RESTART_MAX) {
+                    restartCounts[name].count++;
+                    console.log(`[SYSTEM] Auto-restarting ${name} (attempt ${restartCounts[name].count}/${AUTO_RESTART_MAX})`);
+                    setTimeout(() => startAppProcess(app, true), 3000);
+                } else {
+                    console.log(`[SYSTEM] ${name} crashed too many times, not restarting`);
+                    io.emit(`crash:${name}`, { message: 'App crashed too many times' });
+                }
+            }
+        }
     });
+
+    // Reset restart count on successful start after some time
+    setTimeout(() => {
+        if (runningProcesses[name]) {
+            delete restartCounts[name];
+        }
+    }, 30000);
 
     runningProcesses[name] = child;
     updateAppStatus(name, 'running');
     io.emit(`status:${name}`, 'running');
 };
 
-const stopAppProcess = name => {
+const stopAppProcess = (name, markStopped = true) => {
     if (runningProcesses[name]) {
         console.log(`[SYSTEM] Stopping ${name}`);
+        // Clear auto-restart counter to prevent restart after manual stop
+        delete restartCounts[name];
         runningProcesses[name].kill();
         delete runningProcesses[name];
-        updateAppStatus(name, 'stopped');
+        closeLogStream(name);
+        if (markStopped) {
+            updateAppStatus(name, 'stopped');
+        }
     }
 };
 
@@ -270,13 +473,16 @@ app.post('/api/auth/register', authLimiter, (req, res) => {
     if (password.length < 6) return res.status(400).json({ error: 'Contraseña muy corta' });
     db.get('SELECT COUNT(*) as cnt FROM users', (err, row) => {
         if (err) return res.status(500).json({ error: 'DB error' });
-        const role = row.cnt === 0 ? 'admin' : 'user';
+        // Solo permitir registro del primer usuario (admin). Resto de registros deben ser por admin.
+        if (row.cnt > 0) return res.status(403).json({ error: 'El registro público está deshabilitado. Pide a un admin que te cree un usuario.' });
+        const role = 'admin';
         bcrypt.hash(password, 10, (err, hash) => {
             if (err) return res.status(500).json({ error: 'Hash error' });
             const stmt = db.prepare('INSERT INTO users (email, password, role) VALUES (?, ?, ?)');
             stmt.run(email, hash, role, function (err) {
                 if (err) return res.status(500).json({ error: 'Crear usuario' });
-                res.json({ status: 'ok', userId: this.lastID, role });
+                const token = jwt.sign({ id: this.lastID, email, role }, JWT_SECRET, { expiresIn: '24h' });
+                res.json({ status: 'ok', userId: this.lastID, role, token });
             });
             stmt.finalize();
         });
@@ -402,58 +608,54 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) =
 
 // --- PROFILE ENDPOINT ---
 app.put('/api/auth/profile', authenticateToken, (req, res) => {
-    const { email, password, newPassword } = req.body;
+    const { currentPassword, newPassword } = req.body;
     const userId = req.user.id;
+
+    if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: 'Contraseña actual y nueva requeridas' });
+    }
+
+    if (newPassword.length < 6) {
+        return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' });
+    }
 
     db.get('SELECT * FROM users WHERE id = ?', [userId], (err, user) => {
         if (err || !user) return res.status(404).json({ error: 'Usuario no encontrado' });
 
-        if (password) {
-            bcrypt.compare(password, user.password, (err, ok) => {
-                if (err || !ok) return res.status(401).json({ error: 'Contraseña actual incorrecta' });
+        bcrypt.compare(currentPassword, user.password, (err, ok) => {
+            if (err || !ok) return res.status(401).json({ error: 'Contraseña actual incorrecta' });
 
-                let query = 'UPDATE users SET email = ?';
-                let params = [email];
-
-                if (newPassword) {
-                    bcrypt.hash(newPassword, 10, (err, hash) => {
-                        if (err) return res.status(500).json({ error: 'Hash error' });
-                        query += ', password = ? WHERE id = ?';
-                        params.push(hash, userId);
-                        db.run(query, params, (err) => {
-                            if (err) return res.status(500).json({ error: 'Update error' });
-                            res.json({ status: 'ok' });
-                        });
-                    });
-                } else {
-                    query += ' WHERE id = ?';
-                    params.push(userId);
-                    db.run(query, params, (err) => {
-                        if (err) return res.status(500).json({ error: 'Update error' });
-                        res.json({ status: 'ok' });
-                    });
-                }
+            bcrypt.hash(newPassword, 10, (err, hash) => {
+                if (err) return res.status(500).json({ error: 'Hash error' });
+                db.run('UPDATE users SET password = ? WHERE id = ?', [hash, userId], (err) => {
+                    if (err) return res.status(500).json({ error: 'Update error' });
+                    res.json({ status: 'ok', message: 'Contraseña actualizada' });
+                });
             });
-        } else {
-            return res.status(400).json({ error: 'Contraseña actual requerida' });
-        }
+        });
     });
 });
 
 // --- APPS ENDPOINTS ---
 
-// Get all apps
-app.get('/api/apps', (req, res) => {
+// Get all apps (protected)
+app.get('/api/apps', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const apps = getApps();
-        res.json(apps);
+        const appsWithDisk = await Promise.all(apps.map(async app => {
+            const appPath = app.path || path.join(APPS_DIR, app.name);
+            const diskBytes = await calculateDirSize(appPath);
+            const diskMB = Math.round(diskBytes / (1024 * 1024));
+            return { ...app, diskMB };
+        }));
+        res.json(appsWithDisk);
     } catch (e) {
         res.status(500).json({ error: 'Error leyendo aplicaciones' });
     }
 });
 
 // Deploy new app
-app.post('/api/apps', authenticateToken, upload.single('zipFile'), async (req, res) => {
+app.post('/api/apps', authenticateToken, requireAdmin, upload.single('zipFile'), async (req, res) => {
     const { name, gitUrl, branch } = req.body;
     const file = req.file;
 
@@ -493,7 +695,24 @@ app.post('/api/apps', authenticateToken, upload.single('zipFile'), async (req, r
             deployMethod = 'git';
         } else if (file) {
             const zip = new AdmZip(file.path);
-            zip.extractAllTo(appPath, true);
+            const entries = zip.getEntries();
+            for (const entry of entries) {
+                const entryPath = entry.entryName;
+                // Prevent Zip Slip (../ or absolute paths)
+                const targetPath = path.join(appPath, entryPath);
+                const resolved = path.resolve(targetPath);
+                if (!(resolved === appPath || resolved.startsWith(appPath + path.sep))) {
+                    fs.unlinkSync(file.path);
+                    throw new Error('El ZIP contiene rutas no permitidas');
+                }
+
+                if (entry.isDirectory) {
+                    fs.mkdirSync(resolved, { recursive: true });
+                } else {
+                    fs.mkdirSync(path.dirname(resolved), { recursive: true });
+                    fs.writeFileSync(resolved, entry.getData());
+                }
+            }
             fs.unlinkSync(file.path); // Clean temp file
 
             // Remove node_modules if present in zip to ensure clean install
@@ -563,7 +782,7 @@ app.post('/api/apps', authenticateToken, upload.single('zipFile'), async (req, r
 });
 
 // Delete app
-app.delete('/api/apps/:name', authenticateToken, (req, res) => {
+app.delete('/api/apps/:name', authenticateToken, requireAdmin, (req, res) => {
     const name = req.params.name;
     const apps = getApps();
     const appIndex = apps.findIndex(a => a.name === name);
@@ -591,7 +810,7 @@ app.delete('/api/apps/:name', authenticateToken, (req, res) => {
 });
 
 // Restart app
-app.post('/api/apps/:name/restart', authenticateToken, (req, res) => {
+app.post('/api/apps/:name/restart', authenticateToken, requireAdmin, (req, res) => {
     const name = req.params.name;
     const apps = getApps();
     const appData = apps.find(a => a.name === name);
@@ -609,8 +828,48 @@ app.post('/api/apps/:name/restart', authenticateToken, (req, res) => {
     }
 });
 
+// Start app
+app.post('/api/apps/:name/start', authenticateToken, requireAdmin, (req, res) => {
+    const name = req.params.name;
+    const apps = getApps();
+    const appData = apps.find(a => a.name === name);
+
+    if (!appData) return res.status(404).json({ error: 'App no encontrada' });
+
+    if (runningProcesses[name]) {
+        return res.status(400).json({ error: 'App ya está en ejecución' });
+    }
+
+    try {
+        startAppProcess(appData);
+        res.json({ status: 'ok', message: `${name} iniciada` });
+    } catch (e) {
+        res.status(500).json({ error: 'Error iniciando app' });
+    }
+});
+
+// Stop app
+app.post('/api/apps/:name/stop', authenticateToken, requireAdmin, (req, res) => {
+    const name = req.params.name;
+    const apps = getApps();
+    const appData = apps.find(a => a.name === name);
+
+    if (!appData) return res.status(404).json({ error: 'App no encontrada' });
+
+    if (!runningProcesses[name]) {
+        return res.status(400).json({ error: 'App no está en ejecución' });
+    }
+
+    try {
+        stopAppProcess(name);
+        res.json({ status: 'ok', message: `${name} detenida` });
+    } catch (e) {
+        res.status(500).json({ error: 'Error deteniendo app' });
+    }
+});
+
 // Get Logs
-app.get('/api/apps/:name/logs', authenticateToken, (req, res) => {
+app.get('/api/apps/:name/logs', authenticateToken, requireAdmin, (req, res) => {
     const name = req.params.name;
     const logPath = path.join(LOGS_DIR, `${name}.log`);
 
@@ -626,7 +885,7 @@ app.get('/api/apps/:name/logs', authenticateToken, (req, res) => {
 });
 
 // --- ENV VARIABLES ENDPOINTS ---
-app.get('/api/apps/:name/env', authenticateToken, (req, res) => {
+app.get('/api/apps/:name/env', authenticateToken, requireAdmin, (req, res) => {
     const name = req.params.name;
     const apps = getApps();
     const appData = apps.find(a => a.name === name);
@@ -634,7 +893,7 @@ app.get('/api/apps/:name/env', authenticateToken, (req, res) => {
     res.json(appData.env || {});
 });
 
-app.post('/api/apps/:name/env', authenticateToken, (req, res) => {
+app.post('/api/apps/:name/env', authenticateToken, requireAdmin, (req, res) => {
     const name = req.params.name;
     const envVars = req.body; // Expecting object { KEY: "VALUE" }
     const apps = getApps();
@@ -648,7 +907,7 @@ app.post('/api/apps/:name/env', authenticateToken, (req, res) => {
 });
 
 // --- FILE MANAGER ENDPOINTS ---
-app.get('/api/apps/:name/files', authenticateToken, (req, res) => {
+app.get('/api/apps/:name/files', authenticateToken, requireAdmin, (req, res) => {
     const name = req.params.name;
     const relPath = req.query.path || '';
     const apps = getApps();
@@ -692,7 +951,7 @@ app.get('/api/apps/:name/files', authenticateToken, (req, res) => {
     }
 });
 
-app.get('/api/apps/:name/files/content', authenticateToken, (req, res) => {
+app.get('/api/apps/:name/files/content', authenticateToken, requireAdmin, (req, res) => {
     const name = req.params.name;
     const relPath = req.query.path;
     const apps = getApps();
@@ -717,7 +976,7 @@ app.get('/api/apps/:name/files/content', authenticateToken, (req, res) => {
     }
 });
 
-app.post('/api/apps/:name/files/content', authenticateToken, (req, res) => {
+app.post('/api/apps/:name/files/content', authenticateToken, requireAdmin, (req, res) => {
     const name = req.params.name;
     const { path: relPath, content } = req.body;
     const apps = getApps();
@@ -798,7 +1057,7 @@ const createAppVersion = (appName, deployMethod = 'manual', meta = {}) => {
 };
 
 // List versions
-app.get('/api/apps/:name/versions', authenticateToken, (req, res) => {
+app.get('/api/apps/:name/versions', authenticateToken, requireAdmin, (req, res) => {
     const name = req.params.name;
     const apps = getApps();
     const appData = apps.find(a => a.name === name);
@@ -819,16 +1078,23 @@ app.post('/api/apps/:name/rollback', authenticateToken, requireAdmin, (req, res)
     const version = (appData.versions || []).find(v => v.versionId === versionId);
     if (!version) return res.status(404).json({ error: 'Versión no encontrada' });
 
+    // Prevent rollback to same version in same path (would copy over itself)
+    if (version.path === appData.path && versionId === appData.currentVersion) {
+        return res.status(400).json({ error: 'Ya estás en esta versión' });
+    }
+
     try {
         // Stop current
         stopAppProcess(name);
 
-        // Replace current with version
-        if (fs.existsSync(appData.path)) {
-            fs.rmSync(appData.path, { recursive: true, force: true });
+        // Replace current with version (only if paths differ)
+        if (version.path !== appData.path) {
+            if (fs.existsSync(appData.path)) {
+                fs.rmSync(appData.path, { recursive: true, force: true });
+            }
+            fs.mkdirSync(appData.path, { recursive: true });
+            fs.cpSync(version.path, appData.path, { recursive: true });
         }
-        fs.mkdirSync(appData.path, { recursive: true });
-        fs.cpSync(version.path, appData.path, { recursive: true });
 
         // Update metadata
         appData.currentVersion = versionId;
@@ -843,6 +1109,116 @@ app.post('/api/apps/:name/rollback', authenticateToken, requireAdmin, (req, res)
     }
 });
 
+// --- WEBHOOK ENDPOINT FOR CI/CD ---
+// GitHub/GitLab webhook for auto-deploy
+app.post('/api/apps/:name/webhook', async (req, res) => {
+    const name = req.params.name;
+    const apps = getApps();
+    const appData = apps.find(a => a.name === name);
+
+    if (!appData) return res.status(404).json({ error: 'App no encontrada' });
+
+    // Check if app has a git URL configured
+    const currentVersion = (appData.versions || []).find(v => v.versionId === appData.currentVersion);
+    if (!currentVersion || !currentVersion.gitUrl) {
+        return res.status(400).json({ error: 'App no tiene repositorio Git configurado' });
+    }
+
+    // Optional: Verify webhook signature (GitHub uses X-Hub-Signature-256)
+    const webhookSecret = appData.webhookSecret;
+    if (webhookSecret) {
+        const signature = req.headers['x-hub-signature-256'];
+        if (!signature || !req.rawBody) {
+            return res.status(401).json({ error: 'Missing webhook signature' });
+        }
+        const hmac = crypto.createHmac('sha256', webhookSecret);
+        const digest = 'sha256=' + hmac.update(req.rawBody).digest('hex');
+        const sigBuffer = Buffer.from(signature);
+        const digestBuffer = Buffer.from(digest);
+        if (sigBuffer.length !== digestBuffer.length || !crypto.timingSafeEqual(sigBuffer, digestBuffer)) {
+            return res.status(401).json({ error: 'Invalid webhook signature' });
+        }
+    }
+
+    // Parse payload if needed (already parsed by express.json)
+    let payload = {};
+    try {
+        if (req.rawBody && (!req.body || Object.keys(req.body).length === 0)) {
+            payload = JSON.parse(req.rawBody.toString('utf8'));
+        } else {
+            payload = req.body || {};
+        }
+    } catch (e) {
+        // Ignore parsing errors
+    }
+
+    console.log(`[WEBHOOK] Received webhook for ${name}`);
+
+    try {
+        // Stop current app
+        stopAppProcess(name);
+
+        // Pull latest changes
+        const git = simpleGit(appData.path);
+        await git.fetch();
+        await git.pull('origin', currentVersion.gitBranch || 'main');
+        
+        // Get new commit hash
+        let newCommit = null;
+        try {
+            newCommit = await git.revparse(['--short', 'HEAD']);
+        } catch (e) {
+            // ignore
+        }
+
+        // Reinstall dependencies if Node app
+        if (appData.type === 'node') {
+            const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+            require('child_process').execSync(`${npmCmd} install --production`, { cwd: appData.path });
+        }
+
+        // Create new version entry
+        const versionId = `v${Date.now()}`;
+        const versionMeta = {
+            versionId,
+            deployDate: new Date().toISOString(),
+            deployMethod: 'webhook',
+            gitUrl: currentVersion.gitUrl,
+            gitBranch: currentVersion.gitBranch || 'main',
+            gitCommit: newCommit ? newCommit.trim() : null,
+            path: appData.path
+        };
+        appData.versions = appData.versions || [];
+        appData.versions.push(versionMeta);
+        appData.currentVersion = versionId;
+        saveApps(apps);
+
+        // Restart app
+        startAppProcess(appData);
+
+        res.json({ status: 'ok', message: 'Deployed via webhook', commit: newCommit });
+    } catch (e) {
+        console.error('[WEBHOOK] Error:', e);
+        res.status(500).json({ error: 'Webhook deploy failed: ' + e.message });
+    }
+});
+
+// Configure webhook secret for an app
+app.post('/api/apps/:name/webhook/configure', authenticateToken, requireAdmin, (req, res) => {
+    const name = req.params.name;
+    const { secret } = req.body;
+    
+    const apps = getApps();
+    const idx = apps.findIndex(a => a.name === name);
+    if (idx === -1) return res.status(404).json({ error: 'App no encontrada' });
+    
+    apps[idx].webhookSecret = secret || null;
+    saveApps(apps);
+    
+    const webhookUrl = `${req.protocol}://${req.get('host')}/api/apps/${name}/webhook`;
+    res.json({ status: 'ok', webhookUrl });
+});
+
 // --- HEALTH ENDPOINTS ---
 app.get('/health', (req, res) => {
     const uptime = process.uptime();
@@ -852,7 +1228,7 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', uptime: Math.round(uptime), dbStatus, fsStatus, totalApps: apps.length });
 });
 
-app.get('/api/apps/:name/health', authenticateToken, async (req, res) => {
+app.get('/api/apps/:name/health', authenticateToken, requireAdmin, async (req, res) => {
     const name = req.params.name;
     const apps = getApps();
     const appData = apps.find(a => a.name === name);
@@ -893,24 +1269,46 @@ app.get('/api/apps/:name/health', authenticateToken, async (req, res) => {
 // Health check scheduler: update app health every 60s
 setInterval(() => {
     const apps = getApps();
-    apps.forEach(appData => {
+    let pendingChecks = apps.length;
+    let modified = false;
+    
+    if (pendingChecks === 0) return;
+
+    apps.forEach((appData, index) => {
         const name = appData.name;
         const start = Date.now();
         const reqOptions = { method: 'GET', host: '127.0.0.1', port: appData.port, path: '/', timeout: 3000 };
         const reqHealth = http.request(reqOptions, rres => {
             const ms = Date.now() - start;
             const status = rres.statusCode >= 200 && rres.statusCode < 400 ? 'healthy' : 'unhealthy';
-            appData.health = { status, lastCheck: new Date().toISOString(), responseTime: ms };
-            saveApps(apps);
-            io.emit(`health:${name}`, appData.health);
+            apps[index].health = { status, lastCheck: new Date().toISOString(), responseTime: ms };
+            modified = true;
+            io.emit(`health:${name}`, apps[index].health);
+            rres.resume(); // Consume response to free up memory
+            checkComplete();
         });
         reqHealth.on('error', () => {
-            appData.health = { status: 'unhealthy', lastCheck: new Date().toISOString(), responseTime: null };
-            saveApps(apps);
-            io.emit(`health:${name}`, appData.health);
+            apps[index].health = { status: 'unhealthy', lastCheck: new Date().toISOString(), responseTime: null };
+            modified = true;
+            io.emit(`health:${name}`, apps[index].health);
+            checkComplete();
+        });
+        reqHealth.on('timeout', () => {
+            reqHealth.destroy();
+            apps[index].health = { status: 'unhealthy', lastCheck: new Date().toISOString(), responseTime: null };
+            modified = true;
+            io.emit(`health:${name}`, apps[index].health);
+            checkComplete();
         });
         reqHealth.end();
     });
+    
+    function checkComplete() {
+        pendingChecks--;
+        if (pendingChecks === 0 && modified) {
+            saveApps(apps); // Save only once after all checks complete
+        }
+    }
 }, 60 * 1000);
 
 // --- PATH CORRECTION ---
@@ -934,12 +1332,51 @@ const sanitizeAppPaths = () => {
 // --- SERVER STARTUP ---
 const init = () => {
     sanitizeAppPaths(); // Fix paths before starting
+    cleanOldLogs(); // Clean orphan logs
     const apps = getApps();
     console.log(`[SYSTEM] MiniPaaS started. ${apps.length} apps loaded.`);
-    apps.forEach(startAppProcess);
+    apps.forEach(app => startAppProcess(app));
     setInterval(createBackup, 24 * 60 * 60 * 1000);
     setTimeout(createBackup, 5000);
 };
+
+// --- GRACEFUL SHUTDOWN ---
+const gracefulShutdown = (signal) => {
+    console.log(`\n[SYSTEM] Received ${signal}. Shutting down gracefully...`);
+    
+    // Stop all running apps
+    const appNames = Object.keys(runningProcesses);
+    console.log(`[SYSTEM] Stopping ${appNames.length} running apps...`);
+    appNames.forEach(name => {
+        stopAppProcess(name, false);
+    });
+    
+    // Close all log streams
+    Object.keys(logStreams).forEach(name => {
+        closeLogStream(name);
+    });
+    
+    // Close database
+    db.close((err) => {
+        if (err) console.error('[SYSTEM] Error closing database:', err);
+        else console.log('[SYSTEM] Database closed.');
+    });
+    
+    // Close HTTP server
+    server.close(() => {
+        console.log('[SYSTEM] HTTP server closed.');
+        process.exit(0);
+    });
+    
+    // Force exit after 10 seconds
+    setTimeout(() => {
+        console.error('[SYSTEM] Forced shutdown after timeout');
+        process.exit(1);
+    }, 10000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n>>> MINI PAAS running at http://localhost:${PORT}`);

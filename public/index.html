@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mini PaaS Dashboard</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="/socket.io/socket.io.js"></script>
     <!-- Lucide Icons -->
@@ -462,6 +463,26 @@
         </div>
     </div>
 
+    <!-- Versions Modal -->
+    <div id="versionsModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="bg-[var(--card-bg)] w-full max-w-2xl rounded-2xl shadow-2xl border border-[var(--border-color)] flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center p-6 border-b border-[var(--border-color)]">
+                <h3 class="text-xl font-semibold flex items-center gap-2 text-[var(--text-main)]">
+                    <i data-lucide="git-branch" class="w-5 h-5 text-[var(--accent)]"></i>
+                    Historial de Versiones
+                </h3>
+                <button onclick="closeVersionsModal()" class="text-[var(--text-muted)] hover:text-[var(--text-main)]">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <div id="versionsList" class="space-y-3">
+                    <!-- Versions injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Confirmation Modal Logic
         let confirmCallback = null;
@@ -503,6 +524,10 @@
             document.getElementById('userRoleDisplay').textContent = user.role;
             if (user.role === 'admin') {
                 document.getElementById('adminLink').classList.remove('hidden');
+            }
+            if (user.role !== 'admin') {
+                alert('Esta vista es solo para administradores.');
+                window.location.href = '/settings.html';
             }
         } catch (e) {
             localStorage.removeItem('token');
@@ -555,9 +580,9 @@
         // Mock Data
         function getMockApps() {
             return [
-                { name: 'dashboard-analiticas', port: 5200, type: 'node', status: 'running', deployDate: new Date().toISOString() },
-                { name: 'landing-page-v2', port: 5201, type: 'static', status: 'stopped', deployDate: new Date(Date.now() - 86400000).toISOString() },
-                { name: 'api-microservice', port: 5202, type: 'node', status: 'running', deployDate: new Date(Date.now() - 172800000).toISOString() }
+                { name: 'dashboard-analiticas', port: 5200, type: 'node', status: 'running', deployDate: new Date().toISOString(), diskMB: 180 },
+                { name: 'landing-page-v2', port: 5201, type: 'static', status: 'stopped', deployDate: new Date(Date.now() - 86400000).toISOString(), diskMB: 45 },
+                { name: 'api-microservice', port: 5202, type: 'node', status: 'running', deployDate: new Date(Date.now() - 172800000).toISOString(), diskMB: 220 }
             ];
         }
 
@@ -702,7 +727,7 @@
                 const res = await fetch(API, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (res.status === 401) {
+                if (res.status === 401 || res.status === 403) {
                     logout();
                     return;
                 }
@@ -785,12 +810,23 @@
                             <span class="text-[var(--text-muted)] flex items-center gap-2"><i data-lucide="hard-drive" class="w-4 h-4"></i> RAM</span>
                             <span id="mem-${app.name}" class="font-mono text-[var(--text-main)]">0MB</span>
                         </div>
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-[var(--text-muted)] flex items-center gap-2"><i data-lucide="database" class="w-4 h-4"></i> Disco</span>
+                            <span class="font-mono text-[var(--text-main)]">${typeof app.diskMB === 'number' ? `${app.diskMB}MB` : '—'}</span>
+                        </div>
                     </div>
 
-                    <div class="grid grid-cols-4 gap-2 mt-auto">
+                    <div class="grid grid-cols-5 gap-2 mt-auto">
                         <button onclick="window.open('${url}', '_blank')" class="col-span-2 flex items-center justify-center gap-2 py-2 px-4 bg-[var(--text-main)] hover:bg-opacity-90 text-[var(--card-bg)] rounded-lg text-sm font-medium transition border border-transparent">
                             <i data-lucide="external-link" class="w-4 h-4"></i> Abrir
                         </button>
+                        ${isRunning ? `
+                        <button onclick="stopApp('${app.name}')" class="flex items-center justify-center p-2 border border-red-200 dark:border-red-900 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-red-500 transition" title="Detener">
+                            <i data-lucide="square" class="w-4 h-4"></i>
+                        </button>` : `
+                        <button onclick="startApp('${app.name}')" class="flex items-center justify-center p-2 border border-green-200 dark:border-green-900 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg text-green-500 transition" title="Iniciar">
+                            <i data-lucide="play" class="w-4 h-4"></i>
+                        </button>`}
                         <button onclick="restartApp('${app.name}')" class="flex items-center justify-center p-2 border border-[var(--border-color)] hover:bg-gray-50 dark:hover:bg-[#333] rounded-lg text-[var(--text-main)] transition" title="Reiniciar">
                             <i data-lucide="rotate-cw" class="w-4 h-4"></i>
                         </button>
@@ -803,6 +839,9 @@
                         </button>
                         <button onclick="openFilesModal('${app.name}')" class="col-span-2 flex items-center justify-center gap-2 py-2 text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition mt-1 border border-[var(--border-color)] rounded-lg">
                             <i data-lucide="folder-open" class="w-3 h-3"></i> Archivos
+                        </button>
+                        <button onclick="openVersionsModal('${app.name}')" class="col-span-1 flex items-center justify-center gap-1 py-2 text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition mt-1 border border-[var(--border-color)] rounded-lg" title="Versiones">
+                            <i data-lucide="git-branch" class="w-3 h-3"></i>
                         </button>
                     </div>
                 `;
@@ -841,6 +880,18 @@
         async function restartApp(name) {
             showConfirmModal(`¿Reiniciar ${name}?`, async () => {
                 await performAction(`${API}/${name}/restart`);
+                loadApps();
+            });
+        }
+
+        async function startApp(name) {
+            const ok = await performAction(`${API}/${name}/start`);
+            if (ok) loadApps();
+        }
+
+        async function stopApp(name) {
+            showConfirmModal(`¿Detener ${name}?`, async () => {
+                await performAction(`${API}/${name}/stop`);
                 loadApps();
             });
         }
@@ -1219,6 +1270,108 @@
         loadBranding();
         loadApps();
         setInterval(loadApps, 10000);
+
+        // Versions Modal Logic
+        let currentVersionsApp = null;
+
+        async function openVersionsModal(appName) {
+            currentVersionsApp = appName;
+            document.getElementById('versionsModal').classList.add('active');
+            const list = document.getElementById('versionsList');
+            list.innerHTML = '<div class="text-center py-4 text-[var(--text-muted)]">Cargando versiones...</div>';
+
+            try {
+                const res = await fetch(`${API}/${appName}/versions`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (res.status === 401) { logout(); return; }
+                
+                const versions = await res.json();
+                list.innerHTML = '';
+
+                if (versions.length === 0) {
+                    list.innerHTML = '<div class="text-center py-4 text-[var(--text-muted)]">No hay versiones registradas</div>';
+                    return;
+                }
+
+                // Get current version from apps
+                const appsRes = await fetch(API, { headers: { 'Authorization': `Bearer ${token}` } });
+                const apps = await appsRes.json();
+                const app = apps.find(a => a.name === appName);
+                const currentVersion = app ? app.currentVersion : null;
+
+                // Sort by date descending
+                versions.sort((a, b) => new Date(b.deployDate) - new Date(a.deployDate));
+
+                versions.forEach(v => {
+                    const isCurrent = v.versionId === currentVersion;
+                    const date = new Date(v.deployDate).toLocaleString();
+                    const div = document.createElement('div');
+                    div.className = `p-4 rounded-xl border ${isCurrent ? 'border-[var(--accent)] bg-[var(--accent-light)]' : 'border-[var(--border-color)] bg-[var(--bg-color)]'}`;
+                    div.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="font-mono text-sm font-bold text-[var(--text-main)]">${v.versionId}</span>
+                                    ${isCurrent ? '<span class="text-xs px-2 py-0.5 rounded-full bg-[var(--accent)] text-white">Actual</span>' : ''}
+                                </div>
+                                <p class="text-xs text-[var(--text-muted)] mt-1">${date}</p>
+                                <div class="flex items-center gap-3 mt-2 text-xs text-[var(--text-muted)]">
+                                    <span class="flex items-center gap-1"><i data-lucide="${v.deployMethod === 'git' || v.deployMethod === 'webhook' ? 'git-branch' : 'upload'}" class="w-3 h-3"></i> ${v.deployMethod}</span>
+                                    ${v.gitCommit ? `<span class="font-mono">${v.gitCommit}</span>` : ''}
+                                </div>
+                            </div>
+                            ${!isCurrent ? `
+                            <button onclick="rollbackToVersion('${v.versionId}')" class="px-3 py-1.5 text-xs font-medium text-[var(--accent)] border border-[var(--accent)] rounded-lg hover:bg-[var(--accent)] hover:text-white transition">
+                                Rollback
+                            </button>` : ''}
+                        </div>
+                    `;
+                    list.appendChild(div);
+                });
+
+                lucide.createIcons();
+
+            } catch (e) {
+                list.innerHTML = '<div class="text-center py-4 text-red-500">Error al cargar versiones</div>';
+            }
+        }
+
+        function closeVersionsModal() {
+            document.getElementById('versionsModal').classList.remove('active');
+            currentVersionsApp = null;
+        }
+
+        async function rollbackToVersion(versionId) {
+            if (!currentVersionsApp) return;
+            
+            showConfirmModal(`¿Revertir a la versión ${versionId}?`, async () => {
+                try {
+                    const res = await fetch(`${API}/${currentVersionsApp}/rollback`, {
+                        method: 'POST',
+                        headers: { 
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ versionId })
+                    });
+
+                    if (res.status === 401) { logout(); return; }
+                    if (!res.ok) {
+                        const err = await res.json();
+                        alert(err.error || 'Error en rollback');
+                        return;
+                    }
+
+                    closeVersionsModal();
+                    loadApps();
+                    alert('Rollback completado');
+                } catch (e) {
+                    alert('Error al hacer rollback');
+                }
+            });
+        }
 
     </script>
 </body>

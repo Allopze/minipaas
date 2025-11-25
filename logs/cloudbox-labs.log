@@ -859,3 +859,19 @@ PathError [TypeError]: Missing parameter name at index 1: *; visit https://git.n
 
 Node.js v22.20.0
 [SYSTEM] Process exited with code 1
+[STDOUT] Static App servida en puerto 5200 desde C:\dev\minipaas\apps\cloudbox-labs
+[STDOUT] Static App servida en puerto 5200 desde C:\dev\minipaas\apps\cloudbox-labs
+[STDOUT] Static App servida en puerto 5200 desde C:\dev\minipaas\apps\cloudbox-labs
+[STDOUT] 
+Servidor corriendo en http://localhost:5200
+[STDOUT] Página pública: http://localhost:5200
+[STDOUT] Panel admin: http://localhost:5200/admin
+[SYSTEM] Process exited with code 3221225786
+[STDOUT] 
+Servidor corriendo en http://localhost:5200
+[STDOUT] Página pública: http://localhost:5200
+Panel admin: http://localhost:5200/admin
+[STDOUT] 
+Servidor corriendo en http://localhost:5200
+[STDOUT] Página pública: http://localhost:5200
+Panel admin: http://localhost:5200/admin

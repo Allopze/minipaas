@@ -2,26 +2,26 @@
   {
     "name": "cloudbox-labs",
     "port": 5200,
-    "type": "static",
+    "type": "node",
     "path": "C:\\dev\\minipaas\\apps\\cloudbox-labs",
-    "status": "stopped",
-    "deployDate": "2025-11-20T18:25:11.803Z",
+    "status": "running",
+    "deployDate": "2025-11-25T05:08:44.990Z",
     "versions": [
       {
-        "versionId": "v1763663111803",
-        "deployDate": "2025-11-20T18:25:11.803Z",
-        "deployMethod": "git",
-        "gitUrl": "https://github.com/Allopze/cloudBox-labs.git",
-        "gitBranch": "main",
-        "gitCommit": "c2cc668",
+        "versionId": "v1764047324990",
+        "deployDate": "2025-11-25T05:08:44.990Z",
+        "deployMethod": "zip",
+        "gitUrl": null,
+        "gitBranch": null,
+        "gitCommit": null,
         "path": "C:\\dev\\minipaas\\apps\\cloudbox-labs"
       }
     ],
-    "currentVersion": "v1763663111803",
+    "currentVersion": "v1764047324990",
     "health": {
-      "status": "unhealthy",
-      "lastCheck": "2025-11-20T18:30:12.409Z",
-      "responseTime": null
+      "status": "healthy",
+      "lastCheck": "2025-11-25T23:03:04.048Z",
+      "responseTime": 13
     }
   }
 ]
