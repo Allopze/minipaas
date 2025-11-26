@@ -18,6 +18,7 @@ services:
     volumes:
       # Persistencia de datos
       - ./data:/app/data
+      - ./app-data:/app/app-data    # Datos persistentes de las apps (uploads, DBs, etc.)
       - ./apps:/app/apps
       - ./logs:/app/logs
       - ./backups:/app/backups

@@ -449,7 +449,21 @@
                 </button>
             </div>
             <div class="p-6 overflow-y-auto flex-1">
-                <p class="text-sm text-[var(--text-muted)] mb-4">Define las variables de entorno para tu aplicación. Se requiere reiniciar para aplicar cambios.</p>
+                <!-- Auto-injected variables info -->
+                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-4">
+                    <div class="flex items-center gap-2 text-blue-700 dark:text-blue-400 text-sm font-medium mb-2">
+                        <i data-lucide="info" class="w-4 h-4"></i>
+                        Variables Automáticas (Datos Persistentes)
+                    </div>
+                    <div class="space-y-1 text-xs font-mono text-blue-600 dark:text-blue-300">
+                        <p><span class="font-bold">APP_DATA_PATH</span> → Carpeta raíz de datos</p>
+                        <p><span class="font-bold">APP_UPLOADS_PATH</span> → Para archivos subidos</p>
+                        <p><span class="font-bold">APP_DB_PATH</span> → Para bases de datos</p>
+                    </div>
+                    <p class="text-xs text-blue-600 dark:text-blue-400 mt-2">Estos datos se conservan al actualizar la app.</p>
+                </div>
+
+                <p class="text-sm text-[var(--text-muted)] mb-4">Define variables adicionales. Se requiere reiniciar para aplicar cambios.</p>
                 <form id="envForm" class="space-y-4">
                     <div id="envList" class="space-y-3">
                         <!-- Env Rows injected here -->
@@ -499,6 +513,44 @@
                 <!-- Editor -->
                 <div class="flex-1 flex flex-col bg-[#1e1e1e]">
                     <textarea id="fileEditor" class="flex-1 w-full h-full bg-[#1e1e1e] text-[#d4d4d4] p-4 font-mono text-sm resize-none focus:outline-none code-editor" spellcheck="false" placeholder="Selecciona un archivo para editar..."></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete App Modal -->
+    <div id="deleteAppModal" class="modal fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="bg-[var(--card-bg)] w-full max-w-md rounded-2xl shadow-2xl border border-[var(--border-color)]">
+            <div class="p-6">
+                <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mx-auto mb-4 text-red-600 dark:text-red-400">
+                    <i data-lucide="trash-2" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-lg font-bold text-[var(--text-main)] text-center mb-2">Eliminar Aplicación</h3>
+                <p class="text-sm text-[var(--text-muted)] text-center mb-4">¿Eliminar <strong id="deleteAppName" class="text-[var(--text-main)]"></strong> permanentemente?</p>
+                
+                <!-- Data Info -->
+                <div id="deleteAppDataInfo" class="bg-[var(--bg-color)] rounded-xl p-4 mb-4 border border-[var(--border-color)]">
+                    <div class="flex items-center gap-2 text-sm text-[var(--text-muted)] mb-3">
+                        <i data-lucide="database" class="w-4 h-4"></i>
+                        <span>Datos Persistentes</span>
+                        <span id="deleteAppDataSize" class="ml-auto font-mono text-xs bg-[var(--card-bg)] px-2 py-0.5 rounded"></span>
+                    </div>
+                    <label class="flex items-start gap-3 cursor-pointer group">
+                        <input type="checkbox" id="deleteAppDataCheckbox" class="w-5 h-5 mt-0.5 text-red-600 rounded focus:ring-red-500 border-[var(--border-color)]">
+                        <div>
+                            <span class="text-sm font-medium text-[var(--text-main)] group-hover:text-red-500 transition">También eliminar datos persistentes</span>
+                            <p class="text-xs text-[var(--text-muted)] mt-0.5">Uploads, bases de datos y archivos de usuario serán eliminados permanentemente</p>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="flex gap-3 justify-center">
+                    <button onclick="closeDeleteAppModal()" class="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--bg-color)] transition border border-[var(--border-color)]">
+                        Cancelar
+                    </button>
+                    <button onclick="confirmDeleteApp()" class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-red-500/20 transition">
+                        Eliminar
+                    </button>
                 </div>
             </div>
         </div>
@@ -1010,10 +1062,59 @@
         }
 
         async function deleteApp(name) {
-            showConfirmModal(`¿Borrar ${name} permanentemente?`, async () => {
-                await performAction(`${API}/${name}`, 'DELETE');
-                loadApps();
-            });
+            // Open delete modal with data info
+            document.getElementById('deleteAppName').textContent = name;
+            document.getElementById('deleteAppDataCheckbox').checked = false;
+            document.getElementById('deleteAppModal').dataset.appName = name;
+            
+            // Fetch data info
+            const dataInfoEl = document.getElementById('deleteAppDataInfo');
+            const dataSizeEl = document.getElementById('deleteAppDataSize');
+            dataSizeEl.textContent = 'Cargando...';
+            
+            try {
+                const res = await fetch(`${API}/${name}/data-info`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const info = await res.json();
+                
+                if (info.exists && info.size > 0) {
+                    dataSizeEl.textContent = `${info.size} MB`;
+                    dataInfoEl.classList.remove('hidden');
+                } else {
+                    dataSizeEl.textContent = 'Sin datos';
+                    dataInfoEl.classList.remove('hidden');
+                }
+            } catch (e) {
+                dataSizeEl.textContent = 'N/A';
+            }
+            
+            document.getElementById('deleteAppModal').classList.add('active');
+            lucide.createIcons();
+        }
+
+        function closeDeleteAppModal() {
+            document.getElementById('deleteAppModal').classList.remove('active');
+        }
+
+        async function confirmDeleteApp() {
+            const name = document.getElementById('deleteAppModal').dataset.appName;
+            const deleteData = document.getElementById('deleteAppDataCheckbox').checked;
+            
+            const url = deleteData ? `${API}/${name}?deleteData=true` : `${API}/${name}`;
+            const ok = await performAction(url, 'DELETE');
+            
+            closeDeleteAppModal();
+            
+            if (ok) {
+                if (deleteData) {
+                    showToast('App Eliminada', `${name} y sus datos han sido eliminados.`, 'success');
+                } else {
+                    showToast('App Eliminada', `${name} ha sido eliminada. Los datos persistentes se conservan.`, 'success');
+                }
+            }
+            
+            loadApps();
         }
 
         // Logs Logic

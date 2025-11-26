@@ -13,6 +13,7 @@ npm-debug.log*
 
 # Data and uploads (user-specific)
 data/
+app-data/
 backups/
 temp_uploads/
 public/uploads/

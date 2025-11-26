@@ -31,6 +31,7 @@ const PORT = Number(process.env.PORT) || 5050;
 const START_PORT = 5200;
 const BASE_DIR = __dirname;
 const APPS_DIR = path.join(BASE_DIR, 'apps');
+const APP_DATA_DIR = path.join(BASE_DIR, 'app-data'); // Persistent data for apps
 const DATA_DIR = path.join(BASE_DIR, 'data');
 const LOGS_DIR = path.join(BASE_DIR, 'logs');
 const BACKUPS_DIR = path.join(BASE_DIR, 'backups');
@@ -54,7 +55,7 @@ const CORS_ORIGINS = process.env.CORS_ORIGINS
     : [];
 
 // Ensure required directories exist
-[APPS_DIR, DATA_DIR, LOGS_DIR, BACKUPS_DIR, UPLOADS_DIR].forEach(dir => {
+[APPS_DIR, APP_DATA_DIR, DATA_DIR, LOGS_DIR, BACKUPS_DIR, UPLOADS_DIR].forEach(dir => {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
@@ -322,8 +323,24 @@ const startAppProcess = (appData, isRestart = false) => {
     const logStream = getLogStream(name);
     console.log(`[SYSTEM] Starting ${name} (${type}) on port ${port}`);
 
-    // Merge system env with app env
-    const appEnv = { ...process.env, ...env, PORT: String(port) };
+    // Create persistent data directory for this app
+    const appDataPath = path.join(APP_DATA_DIR, name);
+    if (!fs.existsSync(appDataPath)) {
+        fs.mkdirSync(appDataPath, { recursive: true });
+        // Create common subdirectories
+        fs.mkdirSync(path.join(appDataPath, 'uploads'), { recursive: true });
+        fs.mkdirSync(path.join(appDataPath, 'data'), { recursive: true });
+    }
+
+    // Merge system env with app env, inject APP_DATA_PATH
+    const appEnv = { 
+        ...process.env, 
+        ...env, 
+        PORT: String(port),
+        APP_DATA_PATH: appDataPath,
+        APP_UPLOADS_PATH: path.join(appDataPath, 'uploads'),
+        APP_DB_PATH: path.join(appDataPath, 'data')
+    };
 
     if (!fs.existsSync(appPath)) {
         console.error(`[SYSTEM] Error: App directory ${appPath} does not exist. Skipping ${name}.`);
@@ -853,6 +870,7 @@ app.post('/api/apps', authenticateToken, requireAdmin, upload.single('zipFile'),
 // Delete app
 app.delete('/api/apps/:name', authenticateToken, requireAdmin, (req, res) => {
     const name = req.params.name;
+    const deleteData = req.query.deleteData === 'true'; // Optional: also delete persistent data
     const apps = getApps();
     const appIndex = apps.findIndex(a => a.name === name);
 
@@ -862,19 +880,61 @@ app.delete('/api/apps/:name', authenticateToken, requireAdmin, (req, res) => {
         // Stop process
         stopAppProcess(name);
 
-        // Remove folder
+        // Remove app folder
         const appPath = apps[appIndex].path;
         if (fs.existsSync(appPath)) {
             fs.rmSync(appPath, { recursive: true, force: true });
+        }
+
+        // Optionally remove persistent data
+        const appDataPath = path.join(APP_DATA_DIR, name);
+        if (deleteData && fs.existsSync(appDataPath)) {
+            fs.rmSync(appDataPath, { recursive: true, force: true });
+            console.log(`[SYSTEM] Deleted persistent data for ${name}`);
         }
 
         // Update DB
         apps.splice(appIndex, 1);
         saveApps(apps);
 
-        res.json({ status: 'ok' });
+        res.json({ status: 'ok', dataDeleted: deleteData });
     } catch (e) {
         res.status(500).json({ error: 'Error eliminando app' });
+    }
+});
+
+// Get app persistent data info
+app.get('/api/apps/:name/data-info', authenticateToken, requireAdmin, async (req, res) => {
+    const name = req.params.name;
+    const appDataPath = path.join(APP_DATA_DIR, name);
+    
+    if (!fs.existsSync(appDataPath)) {
+        return res.json({ exists: false, size: 0, path: appDataPath });
+    }
+    
+    try {
+        const size = await calculateDirSize(appDataPath);
+        const sizeMB = Math.round(size / (1024 * 1024) * 100) / 100;
+        
+        // List contents
+        const contents = fs.readdirSync(appDataPath).map(item => {
+            const itemPath = path.join(appDataPath, item);
+            const stats = fs.statSync(itemPath);
+            return {
+                name: item,
+                isDirectory: stats.isDirectory(),
+                size: stats.size
+            };
+        });
+        
+        res.json({ 
+            exists: true, 
+            size: sizeMB, 
+            path: appDataPath,
+            contents 
+        });
+    } catch (e) {
+        res.status(500).json({ error: 'Error obteniendo info de datos' });
     }
 });
 
