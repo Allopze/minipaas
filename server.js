@@ -162,16 +162,27 @@ const saveApps = apps => {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
     fs.writeFileSync(DB_FILE, JSON.stringify(apps, null, 2));
 };
+
+// Default branding configuration
+const DEFAULT_SETTINGS = {
+    appName: 'miniPaaS',
+    showAppName: true,
+    logoLight: null,
+    logoDark: null,
+    favicon: null
+};
+
 const getSettings = () => {
     try {
         if (!fs.existsSync(SETTINGS_FILE)) {
-            fs.writeFileSync(SETTINGS_FILE, JSON.stringify({}));
-            return {};
+            return { ...DEFAULT_SETTINGS };
         }
-        return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8') || '{}');
+        const saved = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8') || '{}');
+        // Merge with defaults (saved values override defaults)
+        return { ...DEFAULT_SETTINGS, ...saved };
     } catch (e) {
         console.error('[SYSTEM] getSettings error', e);
-        return {};
+        return { ...DEFAULT_SETTINGS };
     }
 };
 const saveSettings = settings => {

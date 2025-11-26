@@ -464,6 +464,7 @@
         function openAddUserModal() {
             const modal = document.getElementById('addUserModal');
             modal.classList.remove('hidden');
+            modal.classList.add('flex');
             setTimeout(() => {
                 modal.classList.remove('opacity-0');
                 modal.querySelector('div').classList.remove('scale-95');
@@ -476,6 +477,7 @@
             modal.querySelector('div').classList.add('scale-95');
             setTimeout(() => {
                 modal.classList.add('hidden');
+                modal.classList.remove('flex');
                 document.getElementById('addUserForm').reset();
             }, 300);
         }
