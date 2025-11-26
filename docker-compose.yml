@@ -12,8 +12,8 @@ services:
     
     environment:
       - NODE_ENV=production
-      # Si necesitas definir secretos, hazlo aquí
-      # - JWT_SECRET=tu_secreto_super_seguro
+      # IMPORTANT: Set a strong secret for JWT tokens (generate with: openssl rand -hex 64)
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET environment variable is required}
     
     volumes:
       # Persistencia de datos

@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/styles.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -128,6 +128,23 @@
         lucide.createIcons();
         const isDevEnvironment = window.location.protocol === 'file:' || window.location.protocol === 'blob:';
         const API_BASE = isDevEnvironment ? 'http://localhost:5050' : '';
+
+        // Check if registration is available
+        async function checkCanRegister() {
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/can-register`);
+                const data = await res.json();
+                if (!data.canRegister) {
+                    // Hide register tab if users already exist
+                    document.getElementById('tab-register').style.display = 'none';
+                    document.getElementById('tab-login').classList.add('border-b-0');
+                }
+            } catch (e) {
+                // If check fails, hide register tab to be safe
+                document.getElementById('tab-register').style.display = 'none';
+            }
+        }
+        checkCanRegister();
 
         // Branding Logic
         async function loadBranding() {

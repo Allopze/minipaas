@@ -131,6 +131,10 @@ const logStreams = {};
 // In-memory map of restart counts for auto-restart policy
 const restartCounts = {};
 
+// Cache for disk sizes (updated periodically, not on every request)
+const diskSizeCache = new Map();
+const DISK_CACHE_TTL = 60000; // 1 minute TTL
+
 app.use(cors(corsOptions));
 // Capture raw JSON body for webhook signature validation
 app.use(express.json({
@@ -465,6 +469,14 @@ const authLimiter = rateLimit({
 });
 
 // --- AUTH ENDPOINTS ---
+// Check if public registration is available (only if no users exist)
+app.get('/api/auth/can-register', (req, res) => {
+    db.get('SELECT COUNT(*) as cnt FROM users', (err, row) => {
+        if (err) return res.status(500).json({ canRegister: false });
+        res.json({ canRegister: row.cnt === 0 });
+    });
+});
+
 app.post('/api/auth/register', authLimiter, (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Datos incompletos' });
@@ -599,10 +611,39 @@ app.post('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
 });
 
 app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) => {
-    const id = req.params.id;
-    db.run('DELETE FROM users WHERE id = ?', id, function (err) {
+    const id = parseInt(req.params.id, 10);
+    const currentUserId = req.user.id;
+
+    // Prevent self-deletion
+    if (id === currentUserId) {
+        return res.status(400).json({ error: 'No puedes eliminarte a ti mismo' });
+    }
+
+    // Check if this is the last admin
+    db.get('SELECT role FROM users WHERE id = ?', id, (err, targetUser) => {
         if (err) return res.status(500).json({ error: 'DB error' });
-        res.json({ status: 'ok' });
+        if (!targetUser) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+        if (targetUser.role === 'admin') {
+            // Count remaining admins
+            db.get('SELECT COUNT(*) as count FROM users WHERE role = ?', 'admin', (err, result) => {
+                if (err) return res.status(500).json({ error: 'DB error' });
+                if (result.count <= 1) {
+                    return res.status(400).json({ error: 'No puedes eliminar el ultimo administrador' });
+                }
+                // Safe to delete
+                db.run('DELETE FROM users WHERE id = ?', id, function (err) {
+                    if (err) return res.status(500).json({ error: 'DB error' });
+                    res.json({ status: 'ok' });
+                });
+            });
+        } else {
+            // Not an admin, safe to delete
+            db.run('DELETE FROM users WHERE id = ?', id, function (err) {
+                if (err) return res.status(500).json({ error: 'DB error' });
+                res.json({ status: 'ok' });
+            });
+        }
     });
 });
 
@@ -638,16 +679,31 @@ app.put('/api/auth/profile', authenticateToken, (req, res) => {
 
 // --- APPS ENDPOINTS ---
 
-// Get all apps (protected)
-app.get('/api/apps', authenticateToken, requireAdmin, async (req, res) => {
+// Get cached disk size (non-blocking)
+const getCachedDiskSize = (appName, appPath) => {
+    const cached = diskSizeCache.get(appName);
+    const now = Date.now();
+    if (cached && (now - cached.timestamp) < DISK_CACHE_TTL) {
+        return cached.sizeMB;
+    }
+    // Return cached value if exists, trigger async update
+    if (fs.existsSync(appPath)) {
+        calculateDirSize(appPath).then(bytes => {
+            diskSizeCache.set(appName, { sizeMB: Math.round(bytes / (1024 * 1024)), timestamp: Date.now() });
+        }).catch(() => {});
+    }
+    return cached ? cached.sizeMB : 0;
+};
+
+// Get all apps (protected) - uses cached disk sizes to avoid blocking
+app.get('/api/apps', authenticateToken, requireAdmin, (req, res) => {
     try {
         const apps = getApps();
-        const appsWithDisk = await Promise.all(apps.map(async app => {
+        const appsWithDisk = apps.map(app => {
             const appPath = app.path || path.join(APPS_DIR, app.name);
-            const diskBytes = await calculateDirSize(appPath);
-            const diskMB = Math.round(diskBytes / (1024 * 1024));
+            const diskMB = getCachedDiskSize(app.name, appPath);
             return { ...app, diskMB };
-        }));
+        });
         res.json(appsWithDisk);
     } catch (e) {
         res.status(500).json({ error: 'Error leyendo aplicaciones' });
@@ -1124,20 +1180,22 @@ app.post('/api/apps/:name/webhook', async (req, res) => {
         return res.status(400).json({ error: 'App no tiene repositorio Git configurado' });
     }
 
-    // Optional: Verify webhook signature (GitHub uses X-Hub-Signature-256)
+    // REQUIRED: Verify webhook signature (GitHub uses X-Hub-Signature-256)
     const webhookSecret = appData.webhookSecret;
-    if (webhookSecret) {
-        const signature = req.headers['x-hub-signature-256'];
-        if (!signature || !req.rawBody) {
-            return res.status(401).json({ error: 'Missing webhook signature' });
-        }
-        const hmac = crypto.createHmac('sha256', webhookSecret);
-        const digest = 'sha256=' + hmac.update(req.rawBody).digest('hex');
-        const sigBuffer = Buffer.from(signature);
-        const digestBuffer = Buffer.from(digest);
-        if (sigBuffer.length !== digestBuffer.length || !crypto.timingSafeEqual(sigBuffer, digestBuffer)) {
-            return res.status(401).json({ error: 'Invalid webhook signature' });
-        }
+    if (!webhookSecret) {
+        return res.status(403).json({ error: 'Webhook no configurado. Configura un secreto primero en /api/apps/:name/webhook/configure' });
+    }
+    
+    const signature = req.headers['x-hub-signature-256'];
+    if (!signature || !req.rawBody) {
+        return res.status(401).json({ error: 'Missing webhook signature' });
+    }
+    const hmac = crypto.createHmac('sha256', webhookSecret);
+    const digest = 'sha256=' + hmac.update(req.rawBody).digest('hex');
+    const sigBuffer = Buffer.from(signature);
+    const digestBuffer = Buffer.from(digest);
+    if (sigBuffer.length !== digestBuffer.length || !crypto.timingSafeEqual(sigBuffer, digestBuffer)) {
+        return res.status(401).json({ error: 'Invalid webhook signature' });
     }
 
     // Parse payload if needed (already parsed by express.json)
