@@ -167,6 +167,7 @@ const saveApps = apps => {
 const DEFAULT_SETTINGS = {
     appName: 'miniPaaS',
     showAppName: true,
+    showLoginText: true,
     logoLight: null,
     logoDark: null,
     favicon: null
@@ -575,11 +576,12 @@ app.post('/api/admin/settings', authenticateToken, requireAdmin, brandingUpload.
 ]), (req, res) => {
     try {
         const settings = getSettings();
-        const { appName, showAppName } = req.body;
+        const { appName, showAppName, showLoginText } = req.body;
 
         if (appName !== undefined) settings.appName = appName;
         // FIX: Parse boolean string
         if (showAppName !== undefined) settings.showAppName = showAppName === 'true';
+        if (showLoginText !== undefined) settings.showLoginText = showLoginText === 'true';
 
         if (req.files['logoLight']) {
             settings.logoLight = `/uploads/branding/${req.files['logoLight'][0].filename}`;
@@ -933,6 +935,68 @@ app.post('/api/apps/:name/stop', authenticateToken, requireAdmin, (req, res) => 
     } catch (e) {
         res.status(500).json({ error: 'Error deteniendo app' });
     }
+});
+
+// Change app port
+app.patch('/api/apps/:name/port', authenticateToken, requireAdmin, async (req, res) => {
+    const name = req.params.name;
+    const { port: newPort } = req.body;
+    
+    if (!newPort || isNaN(newPort)) {
+        return res.status(400).json({ error: 'Puerto inválido' });
+    }
+    
+    const portNum = parseInt(newPort, 10);
+    if (portNum < 1024 || portNum > 65535) {
+        return res.status(400).json({ error: 'Puerto debe estar entre 1024 y 65535' });
+    }
+    
+    const apps = getApps();
+    const appIndex = apps.findIndex(a => a.name === name);
+    
+    if (appIndex === -1) {
+        return res.status(404).json({ error: 'App no encontrada' });
+    }
+    
+    // Check if port is already in use by another app
+    const portInUse = apps.find(a => a.name !== name && a.port === portNum);
+    if (portInUse) {
+        return res.status(400).json({ error: `Puerto ${portNum} ya está asignado a ${portInUse.name}` });
+    }
+    
+    // Check if port is available on the system
+    const isPortFree = port => new Promise(resolve => {
+        const server = net.createServer();
+        server.once('error', () => resolve(false));
+        server.once('listening', () => {
+            server.close();
+            resolve(true);
+        });
+        server.listen(port, '0.0.0.0');
+    });
+    
+    // Only check if app is not running (running app occupies its port)
+    const isRunning = !!runningProcesses[name];
+    if (!isRunning) {
+        const portAvailable = await isPortFree(portNum);
+        if (!portAvailable) {
+            return res.status(400).json({ error: `Puerto ${portNum} está ocupado por otro proceso` });
+        }
+    }
+    
+    const oldPort = apps[appIndex].port;
+    apps[appIndex].port = portNum;
+    saveApps(apps);
+    
+    // If app is running, restart it with new port
+    if (isRunning) {
+        stopAppProcess(name);
+        setTimeout(() => {
+            startAppProcess(apps[appIndex]);
+        }, 500);
+    }
+    
+    res.json({ status: 'ok', oldPort, newPort: portNum, restarted: isRunning });
 });
 
 // Get Logs

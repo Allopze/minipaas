@@ -137,6 +137,35 @@
                 transform: rotate(360deg);
             }
         }
+
+        /* Toast Notification */
+        .toast-container {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            pointer-events: none;
+        }
+
+        .toast {
+            pointer-events: auto;
+            transform: translateX(120%);
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.68, -0.15, 0.27, 1.15);
+        }
+
+        .toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        .toast.hide {
+            transform: translateX(120%);
+            opacity: 0;
+        }
     </style>
 </head>
 
@@ -374,6 +403,39 @@
         </div>
     </div>
 
+    <!-- Port Change Modal -->
+    <div id="portModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="bg-[var(--card-bg)] w-full max-w-md rounded-2xl shadow-2xl border border-[var(--border-color)]">
+            <div class="flex justify-between items-center p-6 border-b border-[var(--border-color)]">
+                <h3 class="text-xl font-semibold flex items-center gap-2 text-[var(--text-main)]">
+                    <i data-lucide="globe" class="w-5 h-5 text-[var(--accent)]"></i>
+                    Cambiar Puerto
+                </h3>
+                <button onclick="closePortModal()" class="text-[var(--text-muted)] hover:text-[var(--text-main)]">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-[var(--text-muted)] mb-4">Asigna un nuevo puerto a la aplicación <strong id="portModalAppName" class="text-[var(--text-main)]"></strong>. Si la app está en ejecución, se reiniciará automáticamente.</p>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Puerto Actual</label>
+                        <input type="text" id="currentPort" disabled class="w-full p-3 rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-muted)] font-mono cursor-not-allowed">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Nuevo Puerto</label>
+                        <input type="number" id="newPort" min="1024" max="65535" placeholder="5200" class="w-full p-3 rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:ring-2 focus:ring-[var(--accent)] outline-none font-mono text-[var(--text-main)]">
+                        <p class="text-xs text-[var(--text-muted)] mt-1">Rango válido: 1024 - 65535</p>
+                    </div>
+                </div>
+            </div>
+            <div class="p-6 border-t border-[var(--border-color)] flex justify-end gap-3 bg-[var(--bg-color)] rounded-b-2xl">
+                <button onclick="closePortModal()" class="px-4 py-2 text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)]">Cancelar</button>
+                <button onclick="saveNewPort()" class="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-sm font-medium shadow-lg shadow-red-500/20 transition">Cambiar Puerto</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Env Vars Modal -->
     <div id="envModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
         <div class="bg-[var(--card-bg)] w-full max-w-2xl rounded-2xl shadow-2xl border border-[var(--border-color)] flex flex-col max-h-[90vh]">
@@ -483,7 +545,56 @@
         </div>
     </div>
 
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
     <script>
+        // Toast Notification System
+        function showToast(title, message, type = 'success', duration = 4000) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            
+            const iconMap = {
+                success: { icon: 'check-circle', bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-600 dark:text-green-400' },
+                error: { icon: 'alert-circle', bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-600 dark:text-red-400' },
+                warning: { icon: 'alert-triangle', bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-600 dark:text-yellow-400' },
+                info: { icon: 'info', bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-600 dark:text-blue-400' }
+            };
+            
+            const config = iconMap[type] || iconMap.info;
+            
+            toast.innerHTML = `
+                <div class="bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl rounded-2xl p-4 flex items-start gap-4 max-w-sm min-w-[320px]">
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${config.bg} ${config.text}">
+                        <i data-lucide="${config.icon}" class="w-5 h-5"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h4 class="font-bold text-sm text-[var(--text-main)]">${title}</h4>
+                        <p class="text-sm text-[var(--text-muted)] mt-0.5 break-words">${message}</p>
+                    </div>
+                    <button onclick="this.closest('.toast').remove()" class="text-[var(--text-muted)] hover:text-[var(--text-main)] p-1 -mr-1 -mt-1 transition shrink-0">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            `;
+            
+            container.appendChild(toast);
+            lucide.createIcons({ nodes: [toast] });
+            
+            // Trigger animation
+            requestAnimationFrame(() => {
+                toast.classList.add('show');
+            });
+            
+            // Auto remove
+            setTimeout(() => {
+                toast.classList.remove('show');
+                toast.classList.add('hide');
+                setTimeout(() => toast.remove(), 400);
+            }, duration);
+        }
+
         // Confirmation Modal Logic
         let confirmCallback = null;
 
@@ -526,7 +637,6 @@
                 document.getElementById('adminLink').classList.remove('hidden');
             }
             if (user.role !== 'admin') {
-                alert('Esta vista es solo para administradores.');
                 window.location.href = '/settings.html';
             }
         } catch (e) {
@@ -800,7 +910,10 @@
                     <div class="space-y-3 mb-6">
                         <div class="flex items-center justify-between text-sm">
                             <span class="text-[var(--text-muted)] flex items-center gap-2"><i data-lucide="globe" class="w-4 h-4"></i> Puerto</span>
-                            <span class="font-mono bg-gray-100 dark:bg-[#1a1a1a] border border-transparent dark:border-[#333] px-2 py-0.5 rounded text-[var(--text-main)]">${app.port}</span>
+                            <button onclick="openPortModal('${app.name}', ${app.port})" class="font-mono bg-gray-100 dark:bg-[#1a1a1a] border border-transparent dark:border-[#333] px-2 py-0.5 rounded text-[var(--text-main)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition cursor-pointer flex items-center gap-1" title="Cambiar puerto">
+                                ${app.port}
+                                <i data-lucide="pencil" class="w-3 h-3 opacity-50"></i>
+                            </button>
                         </div>
                         <div class="flex items-center justify-between text-sm">
                             <span class="text-[var(--text-muted)] flex items-center gap-2"><i data-lucide="cpu" class="w-4 h-4"></i> CPU</span>
@@ -1089,9 +1202,74 @@
                 if (!res.ok) throw new Error('Error al guardar');
 
                 closeEnvModal();
-                alert('Variables guardadas. Reinicia la aplicación para aplicar los cambios.');
+                showToast('Variables Guardadas', 'Reinicia la aplicación para aplicar los cambios.', 'success');
             } catch (e) {
-                alert('Error al guardar variables.');
+                showToast('Error', 'No se pudieron guardar las variables.', 'error');
+            }
+        }
+
+        // Port Change Logic
+        let currentPortApp = null;
+
+        function openPortModal(appName, currentPort) {
+            currentPortApp = appName;
+            document.getElementById('portModalAppName').textContent = appName;
+            document.getElementById('currentPort').value = currentPort;
+            document.getElementById('newPort').value = '';
+            document.getElementById('portModal').classList.add('active');
+            document.getElementById('newPort').focus();
+        }
+
+        function closePortModal() {
+            document.getElementById('portModal').classList.remove('active');
+            currentPortApp = null;
+        }
+
+        async function saveNewPort() {
+            if (!currentPortApp) return;
+            
+            const newPort = document.getElementById('newPort').value.trim();
+            if (!newPort) {
+                showToast('Campo Requerido', 'Ingresa un puerto válido.', 'warning');
+                return;
+            }
+            
+            const portNum = parseInt(newPort, 10);
+            if (isNaN(portNum) || portNum < 1024 || portNum > 65535) {
+                showToast('Puerto Inválido', 'El puerto debe estar entre 1024 y 65535.', 'warning');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API}/${currentPortApp}/port`, {
+                    method: 'PATCH',
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ port: portNum })
+                });
+
+                if (res.status === 401) { logout(); return; }
+                
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    showToast('Error', data.error || 'Error al cambiar puerto.', 'error');
+                    return;
+                }
+
+                closePortModal();
+                
+                if (data.restarted) {
+                    showToast('Puerto Actualizado', `Cambiado de ${data.oldPort} a ${data.newPort}. La app se ha reiniciado.`, 'success');
+                } else {
+                    showToast('Puerto Actualizado', `Cambiado de ${data.oldPort} a ${data.newPort}.`, 'success');
+                }
+                
+                loadApps();
+            } catch (e) {
+                showToast('Error', 'No se pudo cambiar el puerto.', 'error');
             }
         }
 
@@ -1253,7 +1431,7 @@
                 }, 2000);
 
             } catch (e) {
-                alert('Error al guardar archivo.');
+                showToast('Error', 'No se pudo guardar el archivo.', 'error');
                 btn.innerHTML = originalText;
                 btn.disabled = false;
             }
@@ -1360,15 +1538,15 @@
                     if (res.status === 401) { logout(); return; }
                     if (!res.ok) {
                         const err = await res.json();
-                        alert(err.error || 'Error en rollback');
+                        showToast('Error', err.error || 'Error en rollback.', 'error');
                         return;
                     }
 
                     closeVersionsModal();
                     loadApps();
-                    alert('Rollback completado');
+                    showToast('Rollback Completado', 'La versión ha sido restaurada correctamente.', 'success');
                 } catch (e) {
-                    alert('Error al hacer rollback');
+                    showToast('Error', 'No se pudo realizar el rollback.', 'error');
                 }
             });
         }

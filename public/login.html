@@ -152,9 +152,17 @@
                 const res = await fetch(`${API_BASE}/api/settings`);
                 const settings = await res.json();
 
-                if (settings.appName) {
-                    document.title = `Login - ${settings.appName}`;
-                    document.getElementById('loginTitle').textContent = settings.appName;
+                const titleContainer = document.getElementById('titleContainer');
+                
+                // Handle showLoginText setting
+                if (settings.showLoginText === false) {
+                    if (titleContainer) titleContainer.classList.add('hidden');
+                } else {
+                    if (titleContainer) titleContainer.classList.remove('hidden');
+                    if (settings.appName) {
+                        document.title = `Login - ${settings.appName}`;
+                        document.getElementById('loginTitle').textContent = settings.appName;
+                    }
                 }
 
                 if (settings.logoDark) { // Use dark logo for dark header background
