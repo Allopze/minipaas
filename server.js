@@ -740,7 +740,7 @@ app.get('/api/apps', authenticateToken, requireAdmin, (req, res) => {
     }
 });
 
-// Deploy new app
+// Deploy new app or update existing
 app.post('/api/apps', authenticateToken, requireAdmin, upload.single('zipFile'), async (req, res) => {
     const { name, gitUrl, branch } = req.body;
     const file = req.file;
@@ -749,14 +749,44 @@ app.post('/api/apps', authenticateToken, requireAdmin, upload.single('zipFile'),
 
     const safeName = name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
     const appPath = path.join(APPS_DIR, safeName);
+    const apps = getApps();
+    const existingAppIndex = apps.findIndex(a => a.name === safeName);
+    const isUpdate = existingAppIndex !== -1;
+    const existingApp = isUpdate ? apps[existingAppIndex] : null;
 
-    if (fs.existsSync(appPath)) {
-        return res.status(400).json({ error: 'La aplicación ya existe' });
+    // For updates, create backup before modifying
+    let backupPath = null;
+    if (isUpdate) {
+        backupPath = path.join(BACKUPS_DIR, `${safeName}_${Date.now()}`);
+        try {
+            // Stop the app first
+            stopAppProcess(safeName);
+            
+            // Create backup of current version
+            if (fs.existsSync(appPath)) {
+                fs.cpSync(appPath, backupPath, { recursive: true });
+                console.log(`[SYSTEM] Created backup for ${safeName} at ${backupPath}`);
+            }
+        } catch (backupErr) {
+            console.error(`[SYSTEM] Backup failed for ${safeName}:`, backupErr);
+            return res.status(500).json({ error: 'Error creando backup antes de actualizar' });
+        }
     }
 
     try {
-        // Prepare directory
-        fs.mkdirSync(appPath, { recursive: true });
+        // For updates, clear existing app directory (but keep structure)
+        if (isUpdate && fs.existsSync(appPath)) {
+            // Remove all files except hidden ones like .git if we want to preserve it
+            const entries = fs.readdirSync(appPath);
+            for (const entry of entries) {
+                // Keep node_modules removal for later, preserve nothing else
+                const fullPath = path.join(appPath, entry);
+                fs.rmSync(fullPath, { recursive: true, force: true });
+            }
+        } else {
+            // New app - create directory
+            fs.mkdirSync(appPath, { recursive: true });
+        }
 
         let deployMethod = 'zip';
         let gitCommit = null;
@@ -770,7 +800,7 @@ app.post('/api/apps', authenticateToken, requireAdmin, upload.single('zipFile'),
                 throw new Error('Git no está instalado en el host');
             }
 
-            // Clone repository
+            // Clone repository (fresh clone for clean state)
             await simpleGit().clone(gitUrl, appPath, ['--branch', gitBranch, '--depth', '1']);
             const localGit = simpleGit(appPath);
             try {
@@ -822,12 +852,7 @@ app.post('/api/apps', authenticateToken, requireAdmin, upload.single('zipFile'),
             require('child_process').execSync(`${npmCmd} install --production`, { cwd: appPath });
         }
 
-        // Assign Port
-        const apps = getApps();
-        const lastPort = apps.length > 0 ? Math.max(...apps.map(a => a.port)) : START_PORT - 1;
-        const port = await findAvailablePort(lastPort + 1);
-
-        // Create initial version metadata
+        // Create version metadata
         const versionId = `v${Date.now()}`;
         const versionMeta = {
             versionId,
@@ -836,33 +861,77 @@ app.post('/api/apps', authenticateToken, requireAdmin, upload.single('zipFile'),
             gitUrl: gitUrl || null,
             gitBranch: gitUrl ? gitBranch : null,
             gitCommit: gitCommit || null,
-            path: appPath
+            backupPath: backupPath || null
         };
 
-        // Save Metadata
-        const newApp = {
-            name: safeName,
-            port,
-            type,
-            path: appPath,
-            status: 'stopped',
-            deployDate: new Date().toISOString(),
-            versions: [versionMeta],
-            currentVersion: versionId,
-            health: { status: 'unknown', lastCheck: null, responseTime: null }
-        };
-        apps.push(newApp);
+        let appData;
+        if (isUpdate) {
+            // Update existing app
+            existingApp.type = type;
+            existingApp.deployDate = new Date().toISOString();
+            existingApp.versions = existingApp.versions || [];
+            existingApp.versions.push(versionMeta);
+            existingApp.currentVersion = versionId;
+            
+            // Keep existing port and env vars
+            apps[existingAppIndex] = existingApp;
+            appData = existingApp;
+            console.log(`[SYSTEM] Updated app ${safeName} to version ${versionId}`);
+        } else {
+            // Assign Port for new app
+            const lastPort = apps.length > 0 ? Math.max(...apps.map(a => a.port)) : START_PORT - 1;
+            const port = await findAvailablePort(lastPort + 1);
+
+            // Save new app Metadata
+            appData = {
+                name: safeName,
+                port,
+                type,
+                path: appPath,
+                status: 'stopped',
+                deployDate: new Date().toISOString(),
+                versions: [versionMeta],
+                currentVersion: versionId,
+                health: { status: 'unknown', lastCheck: null, responseTime: null }
+            };
+            apps.push(appData);
+        }
+        
         saveApps(apps);
 
-        // Start
-        startAppProcess(newApp);
+        // Start the app
+        startAppProcess(appData);
 
-        res.json({ status: 'ok', app: newApp });
+        res.json({ 
+            status: 'ok', 
+            app: appData, 
+            isUpdate,
+            version: versionId,
+            message: isUpdate ? `App actualizada a ${versionId}` : 'App desplegada correctamente'
+        });
 
     } catch (e) {
         console.error(e);
-        // Cleanup if failed
-        if (fs.existsSync(appPath)) fs.rmSync(appPath, { recursive: true, force: true });
+        
+        // Restore from backup if update failed
+        if (isUpdate && backupPath && fs.existsSync(backupPath)) {
+            console.log(`[SYSTEM] Restoring ${safeName} from backup...`);
+            try {
+                if (fs.existsSync(appPath)) {
+                    fs.rmSync(appPath, { recursive: true, force: true });
+                }
+                fs.cpSync(backupPath, appPath, { recursive: true });
+                // Restart the old version
+                startAppProcess(existingApp);
+                console.log(`[SYSTEM] Restored ${safeName} from backup successfully`);
+            } catch (restoreErr) {
+                console.error(`[SYSTEM] Failed to restore ${safeName}:`, restoreErr);
+            }
+        } else if (!isUpdate && fs.existsSync(appPath)) {
+            // Cleanup new app if failed
+            fs.rmSync(appPath, { recursive: true, force: true });
+        }
+        
         res.status(500).json({ error: 'Error en despliegue: ' + e.message });
     }
 });
