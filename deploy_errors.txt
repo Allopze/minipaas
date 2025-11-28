@@ -1,0 +1,28 @@
+[2025-11-28T02:35:51.135Z] Error deploying fail-app: Command failed: npm.cmd install --production
+npm warn config production Use `--omit=dev` instead.
+npm error code E404
+npm error 404 Not Found - GET https://registry.npmjs.org/non-existent-package-xyz-123 - Not found
+npm error 404
+npm error 404  'non-existent-package-xyz-123@1.0.0' is not in this registry.
+npm error 404
+npm error 404 Note that you can also install from a
+npm error 404 tarball, folder, http url, or git url.
+npm error A complete log of this run can be found in: C:\Users\Alejandro L. Zelaya\AppData\Local\npm-cache\_logs\2025-11-28T02_35_50_022Z-debug-0.log
+
+Error: Command failed: npm.cmd install --production
+npm warn config production Use `--omit=dev` instead.
+npm error code E404
+npm error 404 Not Found - GET https://registry.npmjs.org/non-existent-package-xyz-123 - Not found
+npm error 404
+npm error 404  'non-existent-package-xyz-123@1.0.0' is not in this registry.
+npm error 404
+npm error 404 Note that you can also install from a
+npm error 404 tarball, folder, http url, or git url.
+npm error A complete log of this run can be found in: C:\Users\Alejandro L. Zelaya\AppData\Local\npm-cache\_logs\2025-11-28T02_35_50_022Z-debug-0.log
+
+    at genericNodeError (node:internal/errors:983:15)
+    at wrappedFn (node:internal/errors:537:14)
+    at checkExecSyncError (node:child_process:916:11)
+    at Object.execSync (node:child_process:988:15)
+    at C:\dev\minipaas\server.js:881:38
+

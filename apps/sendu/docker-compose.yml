@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: sendu-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - STORAGE_PATH=/app/uploads
+      - PUBLIC_ORIGIN=https://sendu.lat
+      - LOCAL_ORIGIN=http://localhost:3000
+      # ⚠️ IMPORTANTE: Configura estos secretos como variables de entorno del sistema
+      # o usa un archivo .env externo. NUNCA commitees secretos reales.
+      - SESSION_SECRET=${SESSION_SECRET}
+      - PASSWORD_SECRET=${PASSWORD_SECRET}
+      - SESSION_COOKIE_SECURE=true
+      - SESSION_COOKIE_SAMESITE=lax
+      # SMTP Configuration (Brevo)
+      - SMTP_HOST=${SMTP_HOST:-smtp-relay.brevo.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_SECURE=false
+      - SMTP_FROM=${SMTP_FROM:-"Sendu <no-reply@sendu.lat>"}
+    volumes:
+      - ./uploads:/app/uploads
+      - ./db.sqlite:/app/db.sqlite
+      - ./sessions.sqlite:/app/sessions.sqlite

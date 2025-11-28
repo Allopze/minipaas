@@ -5,11 +5,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mini PaaS Dashboard</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
     <link rel="stylesheet" href="/styles.css">
     <script src="/socket.io/socket.io.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SortableJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -78,7 +81,7 @@
             gap: 1rem;
             transition: transform 0.2s;
         }
-        
+
         .stat-card:hover {
             transform: translateY(-2px);
         }
@@ -117,13 +120,16 @@
             width: 8px;
             height: 8px;
         }
+
         ::-webkit-scrollbar-track {
             background: transparent;
         }
+
         ::-webkit-scrollbar-thumb {
             background: var(--border-color);
             border-radius: 4px;
         }
+
         ::-webkit-scrollbar-thumb:hover {
             background: var(--text-muted);
         }
@@ -177,7 +183,8 @@
         <div class="max-w-7xl mx-auto px-6 py-2.5 flex justify-between items-center">
             <div class="flex items-center gap-3">
                 <!-- Icono del Dashboard -->
-                <div id="navIconContainer" class="p-2 rounded-lg text-[var(--accent)]" style="background-color: var(--accent-light);">
+                <div id="navIconContainer" class="p-2 rounded-lg text-[var(--accent)]"
+                    style="background-color: var(--accent-light);">
                     <i id="navIcon" data-lucide="layers" class="w-6 h-6"></i>
                 </div>
                 <img id="navLogo" src="" class="h-10 w-auto object-contain hidden">
@@ -249,8 +256,8 @@
         <!-- Stats Row -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
             <div class="stat-card group">
-                <div class="p-3 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 group-hover:scale-110 transition-transform">
-                    <i data-lucide="box" class="w-6 h-6"></i>
+                <div class="text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                    <i data-lucide="box" class="w-8 h-8"></i>
                 </div>
                 <div>
                     <p class="text-sm font-medium text-[var(--text-muted)]">Total Apps</p>
@@ -258,8 +265,8 @@
                 </div>
             </div>
             <div class="stat-card group">
-                <div class="p-3 rounded-xl bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400 group-hover:scale-110 transition-transform">
-                    <i data-lucide="activity" class="w-6 h-6"></i>
+                <div class="text-green-600 dark:text-green-400 group-hover:scale-110 transition-transform">
+                    <i data-lucide="activity" class="w-8 h-8"></i>
                 </div>
                 <div>
                     <p class="text-sm font-medium text-[var(--text-muted)]">En Ejecución</p>
@@ -267,8 +274,8 @@
                 </div>
             </div>
             <div class="stat-card group">
-                <div class="p-3 rounded-xl bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400 group-hover:scale-110 transition-transform">
-                    <i data-lucide="server-off" class="w-6 h-6"></i>
+                <div class="text-orange-600 dark:text-orange-400 group-hover:scale-110 transition-transform">
+                    <i data-lucide="server-off" class="w-8 h-8"></i>
                 </div>
                 <div>
                     <p class="text-sm font-medium text-[var(--text-muted)]">Detenidas</p>
@@ -278,7 +285,8 @@
         </div>
 
         <!-- Header Section -->
-        <div class="flex flex-col md:flex-row justify-between items-end md:items-center mb-8 gap-4 border-b border-[var(--border-color)] pb-6">
+        <div
+            class="flex flex-col md:flex-row justify-between items-end md:items-center mb-8 gap-4 border-b border-[var(--border-color)] pb-6">
             <div>
                 <h2 class="text-2xl font-bold text-[var(--text-main)] flex items-center gap-2">
                     <i data-lucide="grid" class="w-6 h-6 text-[var(--accent)]"></i>
@@ -324,13 +332,18 @@
                         <input type="text" id="appName" required placeholder="mi-app-react"
                             class="w-full pl-10 pr-4 py-3 rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition text-[var(--text-main)] placeholder-gray-500">
                     </div>
-                    <div id="appNameHint" class="hidden mt-2 text-xs px-3 py-2 rounded-lg flex items-center gap-2"></div>
+                    <div id="appNameHint" class="hidden mt-2 text-xs px-3 py-2 rounded-lg flex items-center gap-2">
+                    </div>
                 </div>
 
                 <!-- Tabs -->
                 <div class="flex border-b border-[var(--border-color)] mb-4">
-                    <button type="button" id="tabZip" class="flex-1 pb-2 text-sm font-medium text-[var(--accent)] border-b-2 border-[var(--accent)] transition" onclick="switchDeployTab('zip')">Subir ZIP</button>
-                    <button type="button" id="tabGit" class="flex-1 pb-2 text-sm font-medium text-[var(--text-muted)] border-b-2 border-transparent hover:text-[var(--text-main)] transition" onclick="switchDeployTab('git')">Repositorio Git</button>
+                    <button type="button" id="tabZip"
+                        class="flex-1 pb-2 text-sm font-medium text-[var(--accent)] border-b-2 border-[var(--accent)] transition"
+                        onclick="switchDeployTab('zip')">Subir ZIP</button>
+                    <button type="button" id="tabGit"
+                        class="flex-1 pb-2 text-sm font-medium text-[var(--text-muted)] border-b-2 border-transparent hover:text-[var(--text-main)] transition"
+                        onclick="switchDeployTab('git')">Repositorio Git</button>
                 </div>
 
                 <!-- ZIP Section -->
@@ -350,9 +363,11 @@
                 <!-- Git Section -->
                 <div id="deployGitSection" class="hidden space-y-4">
                     <div>
-                        <label class="block text-sm font-medium mb-2 text-[var(--text-muted)]">URL del Repositorio</label>
+                        <label class="block text-sm font-medium mb-2 text-[var(--text-muted)]">URL del
+                            Repositorio</label>
                         <div class="relative">
-                            <i data-lucide="git-branch" class="absolute left-3 top-3 w-5 h-5 text-[var(--text-muted)] opacity-70"></i>
+                            <i data-lucide="git-branch"
+                                class="absolute left-3 top-3 w-5 h-5 text-[var(--text-muted)] opacity-70"></i>
                             <input type="url" id="gitUrl" placeholder="https://github.com/usuario/repo.git"
                                 class="w-full pl-10 pr-4 py-3 rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition text-[var(--text-main)] placeholder-gray-500">
                         </div>
@@ -390,7 +405,8 @@
                     Logs en Tiempo Real
                 </h3>
                 <div class="flex items-center gap-3">
-                    <span id="connectionStatus" class="text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400 flex items-center gap-1">
+                    <span id="connectionStatus"
+                        class="text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400 flex items-center gap-1">
                         <span class="w-1.5 h-1.5 rounded-full bg-current"></span> Desconectado
                     </span>
                     <button onclick="closeLogs()" class="text-[var(--text-muted)] hover:text-red-500">
@@ -405,7 +421,8 @@
     </div>
 
     <!-- Port Change Modal -->
-    <div id="portModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+    <div id="portModal"
+        class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
         <div class="bg-[var(--card-bg)] w-full max-w-md rounded-2xl shadow-2xl border border-[var(--border-color)]">
             <div class="flex justify-between items-center p-6 border-b border-[var(--border-color)]">
                 <h3 class="text-xl font-semibold flex items-center gap-2 text-[var(--text-main)]">
@@ -417,29 +434,39 @@
                 </button>
             </div>
             <div class="p-6">
-                <p class="text-sm text-[var(--text-muted)] mb-4">Asigna un nuevo puerto a la aplicación <strong id="portModalAppName" class="text-[var(--text-main)]"></strong>. Si la app está en ejecución, se reiniciará automáticamente.</p>
+                <p class="text-sm text-[var(--text-muted)] mb-4">Asigna un nuevo puerto a la aplicación <strong
+                        id="portModalAppName" class="text-[var(--text-main)]"></strong>. Si la app está en ejecución, se
+                    reiniciará automáticamente.</p>
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Puerto Actual</label>
-                        <input type="text" id="currentPort" disabled class="w-full p-3 rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-muted)] font-mono cursor-not-allowed">
+                        <input type="text" id="currentPort" disabled
+                            class="w-full p-3 rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-muted)] font-mono cursor-not-allowed">
                     </div>
                     <div>
                         <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Nuevo Puerto</label>
-                        <input type="number" id="newPort" min="1024" max="65535" placeholder="5200" class="w-full p-3 rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:ring-2 focus:ring-[var(--accent)] outline-none font-mono text-[var(--text-main)]">
+                        <input type="number" id="newPort" min="1024" max="65535" placeholder="5200"
+                            class="w-full p-3 rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:ring-2 focus:ring-[var(--accent)] outline-none font-mono text-[var(--text-main)]">
                         <p class="text-xs text-[var(--text-muted)] mt-1">Rango válido: 1024 - 65535</p>
                     </div>
                 </div>
             </div>
-            <div class="p-6 border-t border-[var(--border-color)] flex justify-end gap-3 bg-[var(--bg-color)] rounded-b-2xl">
-                <button onclick="closePortModal()" class="px-4 py-2 text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)]">Cancelar</button>
-                <button onclick="saveNewPort()" class="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-sm font-medium shadow-lg shadow-red-500/20 transition">Cambiar Puerto</button>
+            <div
+                class="p-6 border-t border-[var(--border-color)] flex justify-end gap-3 bg-[var(--bg-color)] rounded-b-2xl">
+                <button onclick="closePortModal()"
+                    class="px-4 py-2 text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)]">Cancelar</button>
+                <button onclick="saveNewPort()"
+                    class="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-sm font-medium shadow-lg shadow-red-500/20 transition">Cambiar
+                    Puerto</button>
             </div>
         </div>
     </div>
 
     <!-- Env Vars Modal -->
-    <div id="envModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-        <div class="bg-[var(--card-bg)] w-full max-w-2xl rounded-2xl shadow-2xl border border-[var(--border-color)] flex flex-col max-h-[90vh]">
+    <div id="envModal"
+        class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div
+            class="bg-[var(--card-bg)] w-full max-w-2xl rounded-2xl shadow-2xl border border-[var(--border-color)] flex flex-col max-h-[90vh]">
             <div class="flex justify-between items-center p-6 border-b border-[var(--border-color)]">
                 <h3 class="text-xl font-semibold flex items-center gap-2 text-[var(--text-main)]">
                     <i data-lucide="settings-2" class="w-5 h-5 text-[var(--accent)]"></i>
@@ -451,7 +478,8 @@
             </div>
             <div class="p-6 overflow-y-auto flex-1">
                 <!-- Auto-injected variables info -->
-                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-4">
+                <div
+                    class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-4">
                     <div class="flex items-center gap-2 text-blue-700 dark:text-blue-400 text-sm font-medium mb-2">
                         <i data-lucide="info" class="w-4 h-4"></i>
                         Variables Automáticas (Datos Persistentes)
@@ -461,42 +489,55 @@
                         <p><span class="font-bold">APP_UPLOADS_PATH</span> → Para archivos subidos</p>
                         <p><span class="font-bold">APP_DB_PATH</span> → Para bases de datos</p>
                     </div>
-                    <p class="text-xs text-blue-600 dark:text-blue-400 mt-2">Estos datos se conservan al actualizar la app.</p>
+                    <p class="text-xs text-blue-600 dark:text-blue-400 mt-2">Estos datos se conservan al actualizar la
+                        app.</p>
                 </div>
 
-                <p class="text-sm text-[var(--text-muted)] mb-4">Define variables adicionales. Se requiere reiniciar para aplicar cambios.</p>
+                <p class="text-sm text-[var(--text-muted)] mb-4">Define variables adicionales. Se requiere reiniciar
+                    para aplicar cambios.</p>
                 <form id="envForm" class="space-y-4">
                     <div id="envList" class="space-y-3">
                         <!-- Env Rows injected here -->
                     </div>
-                    <button type="button" onclick="addEnvRow()" class="text-sm text-[var(--accent)] hover:underline flex items-center gap-1 font-medium">
+                    <button type="button" onclick="addEnvRow()"
+                        class="text-sm text-[var(--accent)] hover:underline flex items-center gap-1 font-medium">
                         <i data-lucide="plus" class="w-4 h-4"></i> Añadir Variable
                     </button>
                 </form>
             </div>
-            <div class="p-6 border-t border-[var(--border-color)] flex justify-end gap-3 bg-[var(--bg-color)] rounded-b-2xl">
-                <button onclick="closeEnvModal()" class="px-4 py-2 text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)]">Cancelar</button>
-                <button onclick="saveEnvVars()" class="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-sm font-medium shadow-lg shadow-red-500/20 transition">Guardar Cambios</button>
+            <div
+                class="p-6 border-t border-[var(--border-color)] flex justify-end gap-3 bg-[var(--bg-color)] rounded-b-2xl">
+                <button onclick="closeEnvModal()"
+                    class="px-4 py-2 text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)]">Cancelar</button>
+                <button onclick="saveEnvVars()"
+                    class="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-sm font-medium shadow-lg shadow-red-500/20 transition">Guardar
+                    Cambios</button>
             </div>
         </div>
     </div>
 
     <!-- File Manager Modal -->
-    <div id="filesModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-        <div class="bg-[var(--card-bg)] w-full max-w-6xl h-[85vh] rounded-2xl shadow-2xl border border-[var(--border-color)] flex flex-col overflow-hidden">
-            <div class="flex justify-between items-center p-4 border-b border-[var(--border-color)] bg-[var(--bg-color)]">
+    <div id="filesModal"
+        class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div
+            class="bg-[var(--card-bg)] w-full max-w-6xl h-[85vh] rounded-2xl shadow-2xl border border-[var(--border-color)] flex flex-col overflow-hidden">
+            <div
+                class="flex justify-between items-center p-4 border-b border-[var(--border-color)] bg-[var(--bg-color)]">
                 <div class="flex items-center gap-3">
                     <h3 class="font-semibold flex items-center gap-2 text-[var(--text-main)]">
                         <i data-lucide="folder-open" class="w-5 h-5 text-[var(--accent)]"></i>
                         Explorador de Archivos
                     </h3>
-                    <span id="currentFileName" class="text-sm text-[var(--text-muted)] font-mono bg-gray-200 dark:bg-gray-800 px-2 py-0.5 rounded hidden"></span>
+                    <span id="currentFileName"
+                        class="text-sm text-[var(--text-muted)] font-mono bg-gray-200 dark:bg-gray-800 px-2 py-0.5 rounded hidden"></span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button onclick="saveCurrentFile()" id="saveFileBtn" class="hidden px-3 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-xs font-medium flex items-center gap-2 transition">
+                    <button onclick="saveCurrentFile()" id="saveFileBtn"
+                        class="hidden px-3 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-xs font-medium flex items-center gap-2 transition">
                         <i data-lucide="save" class="w-3 h-3"></i> Guardar
                     </button>
-                    <button onclick="closeFilesModal()" class="text-[var(--text-muted)] hover:text-[var(--text-main)] p-1">
+                    <button onclick="closeFilesModal()"
+                        class="text-[var(--text-muted)] hover:text-[var(--text-main)] p-1">
                         <i data-lucide="x" class="w-5 h-5"></i>
                     </button>
                 </div>
@@ -513,43 +554,56 @@
                 </div>
                 <!-- Editor -->
                 <div class="flex-1 flex flex-col bg-[#1e1e1e]">
-                    <textarea id="fileEditor" class="flex-1 w-full h-full bg-[#1e1e1e] text-[#d4d4d4] p-4 font-mono text-sm resize-none focus:outline-none code-editor" spellcheck="false" placeholder="Selecciona un archivo para editar..."></textarea>
+                    <textarea id="fileEditor"
+                        class="flex-1 w-full h-full bg-[#1e1e1e] text-[#d4d4d4] p-4 font-mono text-sm resize-none focus:outline-none code-editor"
+                        spellcheck="false" placeholder="Selecciona un archivo para editar..."></textarea>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Delete App Modal -->
-    <div id="deleteAppModal" class="modal fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+    <div id="deleteAppModal"
+        class="modal fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
         <div class="bg-[var(--card-bg)] w-full max-w-md rounded-2xl shadow-2xl border border-[var(--border-color)]">
             <div class="p-6">
-                <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mx-auto mb-4 text-red-600 dark:text-red-400">
+                <div
+                    class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mx-auto mb-4 text-red-600 dark:text-red-400">
                     <i data-lucide="trash-2" class="w-6 h-6"></i>
                 </div>
                 <h3 class="text-lg font-bold text-[var(--text-main)] text-center mb-2">Eliminar Aplicación</h3>
-                <p class="text-sm text-[var(--text-muted)] text-center mb-4">¿Eliminar <strong id="deleteAppName" class="text-[var(--text-main)]"></strong> permanentemente?</p>
-                
+                <p class="text-sm text-[var(--text-muted)] text-center mb-4">¿Eliminar <strong id="deleteAppName"
+                        class="text-[var(--text-main)]"></strong> permanentemente?</p>
+
                 <!-- Data Info -->
-                <div id="deleteAppDataInfo" class="bg-[var(--bg-color)] rounded-xl p-4 mb-4 border border-[var(--border-color)]">
+                <div id="deleteAppDataInfo"
+                    class="bg-[var(--bg-color)] rounded-xl p-4 mb-4 border border-[var(--border-color)]">
                     <div class="flex items-center gap-2 text-sm text-[var(--text-muted)] mb-3">
                         <i data-lucide="database" class="w-4 h-4"></i>
                         <span>Datos Persistentes</span>
-                        <span id="deleteAppDataSize" class="ml-auto font-mono text-xs bg-[var(--card-bg)] px-2 py-0.5 rounded"></span>
+                        <span id="deleteAppDataSize"
+                            class="ml-auto font-mono text-xs bg-[var(--card-bg)] px-2 py-0.5 rounded"></span>
                     </div>
                     <label class="flex items-start gap-3 cursor-pointer group">
-                        <input type="checkbox" id="deleteAppDataCheckbox" class="w-5 h-5 mt-0.5 text-red-600 rounded focus:ring-red-500 border-[var(--border-color)]">
+                        <input type="checkbox" id="deleteAppDataCheckbox"
+                            class="w-5 h-5 mt-0.5 text-red-600 rounded focus:ring-red-500 border-[var(--border-color)]">
                         <div>
-                            <span class="text-sm font-medium text-[var(--text-main)] group-hover:text-red-500 transition">También eliminar datos persistentes</span>
-                            <p class="text-xs text-[var(--text-muted)] mt-0.5">Uploads, bases de datos y archivos de usuario serán eliminados permanentemente</p>
+                            <span
+                                class="text-sm font-medium text-[var(--text-main)] group-hover:text-red-500 transition">También
+                                eliminar datos persistentes</span>
+                            <p class="text-xs text-[var(--text-muted)] mt-0.5">Uploads, bases de datos y archivos de
+                                usuario serán eliminados permanentemente</p>
                         </div>
                     </label>
                 </div>
 
                 <div class="flex gap-3 justify-center">
-                    <button onclick="closeDeleteAppModal()" class="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--bg-color)] transition border border-[var(--border-color)]">
+                    <button onclick="closeDeleteAppModal()"
+                        class="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--bg-color)] transition border border-[var(--border-color)]">
                         Cancelar
                     </button>
-                    <button onclick="confirmDeleteApp()" class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-red-500/20 transition">
+                    <button onclick="confirmDeleteApp()"
+                        class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-red-500/20 transition">
                         Eliminar
                     </button>
                 </div>
@@ -558,19 +612,25 @@
     </div>
 
     <!-- Confirmation Modal -->
-    <div id="confirmationModal" class="modal fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-        <div class="bg-[var(--card-bg)] w-full max-w-sm rounded-2xl shadow-2xl border border-[var(--border-color)] transform transition-all scale-100">
+    <div id="confirmationModal"
+        class="modal fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div
+            class="bg-[var(--card-bg)] w-full max-w-sm rounded-2xl shadow-2xl border border-[var(--border-color)] transform transition-all scale-100">
             <div class="p-6 text-center">
-                <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mx-auto mb-4 text-red-600 dark:text-red-400">
+                <div
+                    class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mx-auto mb-4 text-red-600 dark:text-red-400">
                     <i data-lucide="alert-triangle" class="w-6 h-6"></i>
                 </div>
                 <h3 class="text-lg font-bold text-[var(--text-main)] mb-2">¿Estás seguro?</h3>
-                <p id="confirmationMessage" class="text-sm text-[var(--text-muted)] mb-6">Esta acción no se puede deshacer.</p>
+                <p id="confirmationMessage" class="text-sm text-[var(--text-muted)] mb-6">Esta acción no se puede
+                    deshacer.</p>
                 <div class="flex gap-3 justify-center">
-                    <button onclick="closeConfirmModal()" class="px-4 py-2 rounded-xl text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--bg-color)] transition border border-transparent hover:border-[var(--border-color)]">
+                    <button onclick="closeConfirmModal()"
+                        class="px-4 py-2 rounded-xl text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--bg-color)] transition border border-transparent hover:border-[var(--border-color)]">
                         Cancelar
                     </button>
-                    <button id="confirmActionBtn" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium shadow-lg shadow-red-500/20 transition">
+                    <button id="confirmActionBtn"
+                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium shadow-lg shadow-red-500/20 transition">
                         Confirmar
                     </button>
                 </div>
@@ -579,8 +639,10 @@
     </div>
 
     <!-- Versions Modal -->
-    <div id="versionsModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-        <div class="bg-[var(--card-bg)] w-full max-w-2xl rounded-2xl shadow-2xl border border-[var(--border-color)] flex flex-col max-h-[90vh]">
+    <div id="versionsModal"
+        class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div
+            class="bg-[var(--card-bg)] w-full max-w-2xl rounded-2xl shadow-2xl border border-[var(--border-color)] flex flex-col max-h-[90vh]">
             <div class="flex justify-between items-center p-6 border-b border-[var(--border-color)]">
                 <h3 class="text-xl font-semibold flex items-center gap-2 text-[var(--text-main)]">
                     <i data-lucide="git-branch" class="w-5 h-5 text-[var(--accent)]"></i>
@@ -607,16 +669,16 @@
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
             toast.className = 'toast';
-            
+
             const iconMap = {
                 success: { icon: 'check-circle', bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-600 dark:text-green-400' },
                 error: { icon: 'alert-circle', bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-600 dark:text-red-400' },
                 warning: { icon: 'alert-triangle', bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-600 dark:text-yellow-400' },
                 info: { icon: 'info', bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-600 dark:text-blue-400' }
             };
-            
+
             const config = iconMap[type] || iconMap.info;
-            
+
             toast.innerHTML = `
                 <div class="bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl rounded-2xl p-4 flex items-start gap-4 max-w-sm min-w-[320px]">
                     <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${config.bg} ${config.text}">
@@ -631,15 +693,15 @@
                     </button>
                 </div>
             `;
-            
+
             container.appendChild(toast);
             lucide.createIcons({ nodes: [toast] });
-            
+
             // Trigger animation
             requestAnimationFrame(() => {
                 toast.classList.add('show');
             });
-            
+
             // Auto remove
             setTimeout(() => {
                 toast.classList.remove('show');
@@ -662,7 +724,7 @@
             // Remove old listeners to prevent multiple firings
             const newBtn = btn.cloneNode(true);
             btn.parentNode.replaceChild(newBtn, btn);
-            
+
             newBtn.addEventListener('click', () => {
                 if (confirmCallback) confirmCallback();
                 closeConfirmModal();
@@ -759,6 +821,7 @@
             document.body.classList.add('dark');
         }
 
+
         // User Menu Logic
         const userMenuBtn = document.getElementById('userMenuBtn');
         const userDropdown = document.getElementById('userDropdown');
@@ -768,17 +831,6 @@
             e.stopPropagation();
             userDropdown.classList.toggle('hidden');
         });
-
-        document.addEventListener('click', (e) => {
-            if (!userMenuContainer.contains(e.target)) {
-                userDropdown.classList.add('hidden');
-            }
-        });
-
-        function logout() {
-            localStorage.removeItem('token');
-            window.location.href = '/login.html';
-        }
 
         // Branding Logic
         let currentSettings = {};
@@ -876,6 +928,7 @@
             document.getElementById('appNameHint').classList.add('hidden');
             switchDeployTab('zip');
         }
+
         function closeDeployModal() {
             document.getElementById('deployModal').classList.remove('active');
             document.getElementById('deployForm').reset();
@@ -885,19 +938,79 @@
             switchDeployTab('zip');
         }
 
+        // Deploy Form Handler
+        document.getElementById('deployForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const btn = e.target.querySelector('button[type="submit"]');
+            const spinner = document.getElementById('loadingSpinner');
+            const btnText = btn.querySelector('span');
+
+            // UI Loading State
+            btn.disabled = true;
+            btnText.textContent = 'Desplegando...';
+            spinner.classList.remove('hidden');
+
+            try {
+                const formData = new FormData();
+                const name = document.getElementById('appName').value;
+                formData.append('name', name);
+
+                if (currentDeployMethod === 'zip') {
+                    const file = document.getElementById('zipFile').files[0];
+                    if (!file) throw new Error('Selecciona un archivo ZIP');
+                    formData.append('zipFile', file);
+                } else {
+                    const gitUrl = document.getElementById('gitUrl').value;
+                    const branch = document.getElementById('gitBranch').value || 'main';
+                    if (!gitUrl) throw new Error('Ingresa la URL del repositorio');
+                    formData.append('gitUrl', gitUrl);
+                    formData.append('branch', branch);
+                }
+
+                const res = await fetch(API, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+
+                if (res.status === 401) { logout(); return; }
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.error || 'Error en el despliegue');
+                }
+
+                // Success
+                closeDeployModal();
+                showToast('Despliegue Exitoso', data.message || 'La aplicación se ha desplegado correctamente.', 'success');
+                loadApps();
+
+            } catch (error) {
+                console.error(error);
+                showToast('Error de Despliegue', error.message, 'error');
+            } finally {
+                // Reset UI
+                btn.disabled = false;
+                btnText.textContent = 'Desplegar';
+                spinner.classList.add('hidden');
+            }
+        });
+
         // Check if app name exists (for update hint)
         function checkAppNameExists() {
             const input = document.getElementById('appName');
             const hint = document.getElementById('appNameHint');
             const name = input.value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-            
+
             if (!name) {
                 hint.classList.add('hidden');
                 return;
             }
-            
+
             const existingApp = loadedApps.find(a => a.name === name);
-            
+
             if (existingApp) {
                 hint.innerHTML = `<i data-lucide="refresh-cw" class="w-4 h-4"></i> <span>Esta app ya existe. Se <strong>actualizará</strong> a una nueva versión.</span>`;
                 hint.className = 'mt-2 text-xs px-3 py-2 rounded-lg flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800';
@@ -943,7 +1056,6 @@
                     return;
                 }
             }
-
             grid.innerHTML = '';
 
             // Update Stats
@@ -976,12 +1088,13 @@
                 const isRunning = app.status === 'running';
 
                 const card = document.createElement('div');
-                card.className = 'app-card rounded-2xl p-6 relative group';
+                card.className = 'app-card rounded-2xl p-6 relative group cursor-move';
+                card.setAttribute('data-id', app.name);
                 card.innerHTML = `
                     <div class="flex justify-between items-start mb-6">
                         <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-full flex items-center justify-center ${app.type === 'node' ? 'bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'}">
-                                <i data-lucide="${app.type === 'node' ? 'server' : 'file-code'}" class="w-5 h-5"></i>
+                            <div class="${app.type === 'node' ? 'text-green-600 dark:text-green-400' : 'text-blue-600 dark:text-blue-400'}">
+                                <i data-lucide="${app.type === 'node' ? 'server' : 'file-code'}" class="w-8 h-8"></i>
                             </div>
                             <div>
                                 <h3 class="font-semibold text-[var(--text-main)]">${app.name}</h3>
@@ -992,6 +1105,9 @@
                             </div>
                         </div>
                         <div class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                             <button onclick="openRenameModal('${app.name}')" class="text-[var(--text-muted)] hover:text-[var(--accent)] p-2 transition" title="Renombrar">
+                                <i data-lucide="edit-3" class="w-4 h-4"></i>
+                            </button>
                              <button onclick="deleteApp('${app.name}')" class="text-[var(--text-muted)] hover:text-red-500 p-2 transition" title="Eliminar">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                             </button>
@@ -1037,7 +1153,7 @@
                         <button onclick="openEnvModal('${app.name}')" class="flex items-center justify-center p-2 border border-[var(--border-color)] hover:bg-gray-50 dark:hover:bg-[#333] rounded-lg text-[var(--text-main)] transition" title="Variables de Entorno">
                             <i data-lucide="settings-2" class="w-4 h-4"></i>
                         </button>
-                        
+
                         <button onclick="viewLogs('${app.name}')" class="col-span-2 flex items-center justify-center gap-2 py-2 text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition mt-1 border border-[var(--border-color)] rounded-lg">
                             <i data-lucide="terminal" class="w-3 h-3"></i> Logs
                         </button>
@@ -1068,6 +1184,7 @@
                     // Simulacion visual
                     return true;
                 }
+
             } else {
                 const res = await fetch(url, {
                     method,
@@ -1105,18 +1222,18 @@
             document.getElementById('deleteAppName').textContent = name;
             document.getElementById('deleteAppDataCheckbox').checked = false;
             document.getElementById('deleteAppModal').dataset.appName = name;
-            
+
             // Fetch data info
             const dataInfoEl = document.getElementById('deleteAppDataInfo');
             const dataSizeEl = document.getElementById('deleteAppDataSize');
             dataSizeEl.textContent = 'Cargando...';
-            
+
             try {
                 const res = await fetch(`${API}/${name}/data-info`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const info = await res.json();
-                
+
                 if (info.exists && info.size > 0) {
                     dataSizeEl.textContent = `${info.size} MB`;
                     dataInfoEl.classList.remove('hidden');
@@ -1127,7 +1244,7 @@
             } catch (e) {
                 dataSizeEl.textContent = 'N/A';
             }
-            
+
             document.getElementById('deleteAppModal').classList.add('active');
             lucide.createIcons();
         }
@@ -1139,423 +1256,34 @@
         async function confirmDeleteApp() {
             const name = document.getElementById('deleteAppModal').dataset.appName;
             const deleteData = document.getElementById('deleteAppDataCheckbox').checked;
-            
-            const url = deleteData ? `${API}/${name}?deleteData=true` : `${API}/${name}`;
-            const ok = await performAction(url, 'DELETE');
-            
-            closeDeleteAppModal();
-            
-            if (ok) {
-                if (deleteData) {
-                    showToast('App Eliminada', `${name} y sus datos han sido eliminados.`, 'success');
-                } else {
-                    showToast('App Eliminada', `${name} ha sido eliminada. Los datos persistentes se conservan.`, 'success');
-                }
-            }
-            
-            loadApps();
-        }
-
-        // Logs Logic
-        async function viewLogs(name) {
-            document.getElementById('logsModal').classList.add('active');
-            const content = document.getElementById('logsContent');
-            content.textContent = 'Cargando historial de logs...\n';
-            currentLogApp = name;
-
-            try {
-                const res = await fetch(`${API}/${name}/logs`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    content.textContent = data.logs || 'No hay logs previos.\n';
-                }
-            } catch (e) {
-                console.error(e);
-            }
-
-            content.textContent += '\n--- Conectado a tiempo real ---\n';
-            const container = content.parentElement;
-            container.scrollTop = container.scrollHeight;
-
-            if (socket) {
-                // Limpiar listeners anteriores
-                socket.off(`log:${name}`);
-                
-                // Escuchar nuevos logs
-                socket.on(`log:${name}`, (data) => {
-                    content.textContent += data;
-                    // Auto-scroll
-                    const container = content.parentElement;
-                    container.scrollTop = container.scrollHeight;
-                });
-            }
-        }
-
-        function closeLogs() {
-            document.getElementById('logsModal').classList.remove('active');
-            if (socket && currentLogApp) {
-                socket.off(`log:${currentLogApp}`);
-                currentLogApp = null;
-            }
-        }
-
-        // Upload Logic
-        document.getElementById('deployForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const btn = e.target.querySelector('button[type="submit"]');
-            const spinner = document.getElementById('loadingSpinner');
-            const status = document.getElementById('uploadStatus');
+            const btn = document.querySelector('button[onclick="confirmDeleteApp()"]');
+            const originalText = btn.textContent;
 
             btn.disabled = true;
-            spinner.classList.remove('hidden');
-            status.classList.remove('hidden');
-            status.textContent = currentDeployMethod === 'git' ? "Clonando repositorio..." : "Subiendo proyecto...";
-            status.className = "text-sm text-center text-[var(--accent)] animate-pulse";
-
-            const formData = new FormData();
-            formData.append('name', document.getElementById('appName').value);
-            
-            if (currentDeployMethod === 'zip') {
-                const file = document.getElementById('zipFile').files[0];
-                if (file) formData.append('zipFile', file);
-            } else {
-                formData.append('gitUrl', document.getElementById('gitUrl').value);
-                formData.append('branch', document.getElementById('gitBranch').value);
-            }
+            btn.textContent = 'Eliminando...';
 
             try {
-                const res = await fetch(API, {
-                    method: 'POST',
-                    body: formData,
+                const res = await fetch(`${API}/${name}?deleteData=${deleteData}`, {
+                    method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
-                if (res.status === 401) {
-                    logout();
-                    return;
-                }
+                if (res.status === 401) { logout(); return; }
+                if (!res.ok) throw new Error('Error al eliminar');
 
-                const data = await res.json();
-
-                if (!res.ok) {
-                    throw new Error(data.error || 'Error en servidor');
-                }
-
-                closeDeployModal();
+                showToast('App Eliminada', `La aplicación ${name} ha sido eliminada.`, 'success');
+                closeDeleteAppModal();
                 loadApps();
+
+            } catch (e) {
+                showToast('Error', 'No se pudo eliminar la aplicación.', 'error');
+            } finally {
                 btn.disabled = false;
-                spinner.classList.add('hidden');
-
-                // Show appropriate toast
-                if (data.isUpdate) {
-                    showToast('App Actualizada', `${data.app.name} actualizada a ${data.version}`, 'success');
-                } else {
-                    showToast('App Desplegada', `${data.app.name} desplegada en puerto ${data.app.port}`, 'success');
-                }
-
-            } catch (err) {
-                if (isDevEnvironment) {
-                    closeDeployModal();
-                    loadApps();
-                    btn.disabled = false;
-                    spinner.classList.add('hidden');
-                } else {
-                    status.textContent = err.message || "Error al subir.";
-                    status.className = "text-sm text-center text-red-500";
-                    btn.disabled = false;
-                    spinner.classList.add('hidden');
-                }
-            }
-        });
-
-        // Env Vars Logic
-        let currentEnvApp = null;
-
-        async function openEnvModal(appName) {
-            currentEnvApp = appName;
-            document.getElementById('envModal').classList.add('active');
-            const list = document.getElementById('envList');
-            list.innerHTML = '<div class="text-center py-4 text-[var(--text-muted)]">Cargando variables...</div>';
-
-            try {
-                const res = await fetch(`${API}/${appName}/env`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
-                if (res.status === 401) { logout(); return; }
-                
-                const envVars = await res.json(); // { KEY: "VAL", ... }
-                list.innerHTML = '';
-                
-                Object.entries(envVars).forEach(([key, value]) => {
-                    addEnvRow(key, value);
-                });
-                
-                if (Object.keys(envVars).length === 0) {
-                    // Añadir una fila vacía si no hay vars
-                    addEnvRow();
-                }
-
-            } catch (e) {
-                list.innerHTML = '<div class="text-center py-4 text-red-500">Error al cargar variables</div>';
-            }
-        }
-
-        function closeEnvModal() {
-            document.getElementById('envModal').classList.remove('active');
-            currentEnvApp = null;
-        }
-
-        function addEnvRow(key = '', value = '') {
-            const row = document.createElement('div');
-            row.className = 'flex items-center gap-2';
-
-            row.innerHTML = `
-                <input type="text" value="${key}" class="flex-1 px-3 py-2 text-sm rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition text-[var(--text-main)]" placeholder="NOMBRE_VARIABLE">
-                <input type="text" value="${value}" class="flex-1 px-3 py-2 text-sm rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition text-[var(--text-main)]" placeholder="valor">
-                <button type="button" onclick="removeEnvRow(this)" class="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition">
-                    <i data-lucide="trash-2" class="w-4 h-4"></i>
-                </button>
-            `;
-
-            document.getElementById('envList').appendChild(row);
-        }
-
-        function removeEnvRow(button) {
-            button.closest('div').remove();
-        }
-
-        async function saveEnvVars() {
-            if (!currentEnvApp) return;
-            
-            const rows = document.querySelectorAll('#envList > div');
-            const envVars = {};
-
-            rows.forEach(row => {
-                const inputs = row.querySelectorAll('input[type="text"]');
-                const key = inputs[0].value.trim();
-                const value = inputs[1].value.trim();
-                if (key) {
-                    envVars[key] = value;
-                }
-            });
-
-            try {
-                const res = await fetch(`${API}/${currentEnvApp}/env`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify(envVars)
-                });
-
-                if (res.status === 401) { logout(); return; }
-                if (!res.ok) throw new Error('Error al guardar');
-
-                closeEnvModal();
-                showToast('Variables Guardadas', 'Reinicia la aplicación para aplicar los cambios.', 'success');
-            } catch (e) {
-                showToast('Error', 'No se pudieron guardar las variables.', 'error');
-            }
-        }
-
-        // Port Change Logic
-        let currentPortApp = null;
-
-        function openPortModal(appName, currentPort) {
-            currentPortApp = appName;
-            document.getElementById('portModalAppName').textContent = appName;
-            document.getElementById('currentPort').value = currentPort;
-            document.getElementById('newPort').value = '';
-            document.getElementById('portModal').classList.add('active');
-            document.getElementById('newPort').focus();
-        }
-
-        function closePortModal() {
-            document.getElementById('portModal').classList.remove('active');
-            currentPortApp = null;
-        }
-
-        async function saveNewPort() {
-            if (!currentPortApp) return;
-            
-            const newPort = document.getElementById('newPort').value.trim();
-            if (!newPort) {
-                showToast('Campo Requerido', 'Ingresa un puerto válido.', 'warning');
-                return;
-            }
-            
-            const portNum = parseInt(newPort, 10);
-            if (isNaN(portNum) || portNum < 1024 || portNum > 65535) {
-                showToast('Puerto Inválido', 'El puerto debe estar entre 1024 y 65535.', 'warning');
-                return;
-            }
-
-            try {
-                const res = await fetch(`${API}/${currentPortApp}/port`, {
-                    method: 'PATCH',
-                    headers: { 
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ port: portNum })
-                });
-
-                if (res.status === 401) { logout(); return; }
-                
-                const data = await res.json();
-                
-                if (!res.ok) {
-                    showToast('Error', data.error || 'Error al cambiar puerto.', 'error');
-                    return;
-                }
-
-                closePortModal();
-                
-                if (data.restarted) {
-                    showToast('Puerto Actualizado', `Cambiado de ${data.oldPort} a ${data.newPort}. La app se ha reiniciado.`, 'success');
-                } else {
-                    showToast('Puerto Actualizado', `Cambiado de ${data.oldPort} a ${data.newPort}.`, 'success');
-                }
-                
-                loadApps();
-            } catch (e) {
-                showToast('Error', 'No se pudo cambiar el puerto.', 'error');
-            }
-        }
-
-        // File Manager Logic
-        let currentFileApp = null;
-        let currentFilePath = '';
-
-        function openFilesModal(appName) {
-            currentFileApp = appName;
-            currentFilePath = '';
-            document.getElementById('filesModal').classList.add('active');
-            loadFileTree(appName);
-        }
-
-        function closeFilesModal() {
-            document.getElementById('filesModal').classList.remove('active');
-            currentFileApp = null;
-            currentFilePath = '';
-            document.getElementById('fileEditor').value = '';
-            document.getElementById('saveFileBtn').classList.add('hidden');
-            document.getElementById('currentFileName').classList.add('hidden');
-        }
-
-        async function loadFileTree(appName, path = '') {
-            currentFilePath = path;
-            const fileList = document.getElementById('fileList');
-            fileList.innerHTML = '<div class="animate-pulse text-center py-4 text-[var(--text-muted)]">Cargando archivos...</div>';
-
-            try {
-                const res = await fetch(`${API}/${appName}/files?path=${encodeURIComponent(path)}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (res.status === 401) { logout(); return; }
-                if (!res.ok) throw new Error('Error');
-
-                const files = await res.json();
-                fileList.innerHTML = '';
-
-                // Add "Go Up" button if not in root
-                if (path) {
-                    const upDiv = document.createElement('div');
-                    upDiv.className = 'text-sm text-[var(--text-muted)] flex items-center gap-2 py-2 px-3 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-[#333] transition mb-1';
-                    upDiv.innerHTML = `<i data-lucide="corner-left-up" class="w-4 h-4"></i> <span>..</span>`;
-                    const parentPath = path.split('/').slice(0, -1).join('/');
-                    upDiv.onclick = () => loadFileTree(appName, parentPath);
-                    fileList.appendChild(upDiv);
-                }
-
-                if (files.length === 0) {
-                    fileList.innerHTML += '<div class="text-center py-4 text-[var(--text-muted)] text-xs">Carpeta vacía</div>';
-                    lucide.createIcons();
-                    return;
-                }
-
-                // Simple sort: folders first
-                files.sort((a, b) => {
-                    if (a.isDirectory === b.isDirectory) return a.name.localeCompare(b.name);
-                    return a.isDirectory ? -1 : 1;
-                });
-
-                files.forEach(file => {
-                    const div = document.createElement('div');
-                    div.className = 'text-sm text-[var(--text-main)] flex items-center justify-between py-2 px-3 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-[#333] transition group';
-                    
-                    const icon = file.isDirectory ? 'folder' : 'file-code';
-                    const fullPath = file.path; // Server returns relative path from app root
-                    
-                    // Click action: Enter folder OR Open file
-                    div.onclick = (e) => {
-                        // Prevent triggering if clicking action buttons
-                        if (e.target.closest('button')) return;
-                        
-                        if (file.isDirectory) {
-                            loadFileTree(appName, fullPath);
-                        } else {
-                            openFileEditor(fullPath);
-                        }
-                    };
-
-                    div.innerHTML = `
-                        <div class="flex items-center gap-2 truncate">
-                            <i data-lucide="${icon}" class="w-4 h-4 ${file.isDirectory ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}"></i>
-                            <span class="font-medium truncate">${file.name}</span>
-                        </div>
-                    `;
-                    
-                    fileList.appendChild(div);
-                });
-
-                lucide.createIcons();
-            } catch (e) {
-                console.error(e);
-                fileList.innerHTML = '<div class="text-red-500 text-center py-4 text-xs">Error al cargar</div>';
-            }
-        }
-
-        async function openFileEditor(filePath) {
-            if (!currentFileApp) return;
-            
-            const editor = document.getElementById('fileEditor');
-            const saveBtn = document.getElementById('saveFileBtn');
-            const nameLabel = document.getElementById('currentFileName');
-
-            editor.value = 'Cargando...';
-            editor.disabled = true;
-            
-            try {
-                const res = await fetch(`${API}/${currentFileApp}/files/content?path=${encodeURIComponent(filePath)}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
-                if (res.status === 401) { logout(); return; }
-                if (!res.ok) throw new Error('Error');
-                
-                const data = await res.json();
-                editor.value = data.content;
-                editor.disabled = false;
-                editor.dataset.filePath = filePath; // Store full path
-                
-                nameLabel.textContent = filePath;
-                nameLabel.classList.remove('hidden');
-                saveBtn.classList.remove('hidden');
-
-            } catch (e) {
-                editor.value = 'Error al leer el archivo.';
+                btn.textContent = originalText;
             }
         }
 
         async function saveCurrentFile() {
-            const editor = document.getElementById('fileEditor');
-            const filePath = editor.dataset.filePath;
-            
-            if (!currentFileApp || !filePath) return;
-
             const btn = document.getElementById('saveFileBtn');
             const originalText = btn.innerHTML;
             btn.innerHTML = '<div class="loader w-3 h-3 border-white"></div> Guardando...';
@@ -1613,9 +1341,9 @@
                 const res = await fetch(`${API}/${appName}/versions`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                
+
                 if (res.status === 401) { logout(); return; }
-                
+
                 const versions = await res.json();
                 list.innerHTML = '';
 
@@ -1639,22 +1367,23 @@
                     const div = document.createElement('div');
                     div.className = `p-4 rounded-xl border ${isCurrent ? 'border-[var(--accent)] bg-[var(--accent-light)]' : 'border-[var(--border-color)] bg-[var(--bg-color)]'}`;
                     div.innerHTML = `
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <div class="flex items-center gap-2">
-                                    <span class="font-mono text-sm font-bold text-[var(--text-main)]">${v.versionId}</span>
-                                    ${isCurrent ? '<span class="text-xs px-2 py-0.5 rounded-full bg-[var(--accent)] text-white">Actual</span>' : ''}
-                                </div>
-                                <p class="text-xs text-[var(--text-muted)] mt-1">${date}</p>
-                                <div class="flex items-center gap-3 mt-2 text-xs text-[var(--text-muted)]">
-                                    <span class="flex items-center gap-1"><i data-lucide="${v.deployMethod === 'git' || v.deployMethod === 'webhook' ? 'git-branch' : 'upload'}" class="w-3 h-3"></i> ${v.deployMethod}</span>
-                                    ${v.gitCommit ? `<span class="font-mono">${v.gitCommit}</span>` : ''}
-                                </div>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-sm font-bold text-[var(--text-main)]">${v.versionId}</span>
+                                ${isCurrent ? '<span class="text-xs px-2 py-0.5 rounded-full bg-[var(--accent)] text-white">Actual</span>' : ''}
                             </div>
+                            <p class="text-xs text-[var(--text-muted)] mt-1">${date}</p>
+                            <div class="flex items-center gap-3 mt-2 text-xs text-[var(--text-muted)]">
+                                <span class="flex items-center gap-1"><i data-lucide="${v.deployMethod === 'git' || v.deployMethod === 'webhook' ? 'git-branch' : 'upload'}" class="w-3 h-3"></i> ${v.deployMethod}</span>
+                                ${v.gitCommit ? `<span class="font-mono">${v.gitCommit}</span>` : ''}
+                            </div>
+                        </div>
                             ${!isCurrent ? `
                             <button onclick="rollbackToVersion('${v.versionId}')" class="px-3 py-1.5 text-xs font-medium text-[var(--accent)] border border-[var(--accent)] rounded-lg hover:bg-[var(--accent)] hover:text-white transition">
                                 Rollback
-                            </button>` : ''}
+                            </button>` : ''
+                        }
                         </div>
                     `;
                     list.appendChild(div);
@@ -1674,12 +1403,12 @@
 
         async function rollbackToVersion(versionId) {
             if (!currentVersionsApp) return;
-            
-            showConfirmModal(`¿Revertir a la versión ${versionId}?`, async () => {
+
+            openConfirmModal(`¿Revertir a la versión ${versionId}?`, async () => {
                 try {
                     const res = await fetch(`${API}/${currentVersionsApp}/rollback`, {
                         method: 'POST',
-                        headers: { 
+                        headers: {
                             'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
                         },
@@ -1702,7 +1431,161 @@
             });
         }
 
+        // Rename Logic
+        let currentRenameApp = null;
+
+        function openRenameModal(name) {
+            console.log('Opening rename modal for:', name);
+            if (!name) return;
+            currentRenameApp = name;
+            const oldNameEl = document.getElementById('renameOldName');
+            const newNameInput = document.getElementById('renameNewName');
+
+            if (oldNameEl) oldNameEl.textContent = name;
+            if (newNameInput) {
+                newNameInput.value = name;
+                newNameInput.dispatchEvent(new Event('input'));
+            }
+
+            document.getElementById('renameModal').classList.add('active');
+            setTimeout(() => newNameInput?.focus(), 100);
+        }
+
+        function closeRenameModal() {
+            document.getElementById('renameModal').classList.remove('active');
+            currentRenameApp = null;
+        }
+
+        // Real-time sanitization for rename input
+        const renameInput = document.getElementById('renameNewName');
+        if (renameInput) {
+            renameInput.addEventListener('input', (e) => {
+                const input = e.target;
+                const val = input.value;
+                const safe = val.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+                if (val !== safe) {
+                    input.value = safe;
+                }
+            });
+        }
+
+        async function submitRename() {
+            const newName = document.getElementById('renameNewName').value.trim();
+            if (!newName || !currentRenameApp) return;
+
+            const btn = document.querySelector('#renameModal button:last-child');
+            const originalText = btn.textContent;
+            btn.textContent = 'Renombrando...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`${API}/${currentRenameApp}/rename`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ newName })
+                });
+
+                if (res.status === 401) { logout(); return; }
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.error || 'Error al renombrar');
+                }
+
+                closeRenameModal();
+                showToast('App Renombrada', `La aplicación ahora es ${data.name}`, 'success');
+                loadApps();
+
+            } catch (e) {
+                showToast('Error', e.message, 'error');
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const grid = document.getElementById('appsGrid');
+            new Sortable(grid, {
+                animation: 150,
+                ghostClass: 'bg-gray-50',
+                handle: '.app-card', // Make the whole card the handle
+                onEnd: async function (evt) {
+                    const newOrder = Array.from(grid.children)
+                        .map(el => el.getAttribute('data-id'))
+                        .filter(id => id); // Filter out non-app elements (alerts, etc)
+
+                    if (newOrder.length === 0) return;
+
+                    try {
+                        await fetch(`${API}/reorder`, {
+                            method: 'PUT',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ order: newOrder })
+                        });
+                    } catch (e) {
+                        console.error('Error saving order', e);
+                        showToast('Error', 'No se pudo guardar el orden', 'warning');
+                    }
+                }
+            });
+        });
     </script>
+    <!-- Rename Modal -->
+    <div id="renameModal"
+        class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div
+            class="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl w-full max-w-md p-6 transform transition-all scale-100">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-semibold text-[var(--text-main)]">Renombrar Aplicación</h2>
+                <button onclick="closeRenameModal()"
+                    class="text-[var(--text-muted)] hover:text-[var(--text-main)] transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <div
+                    class="p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-sm text-yellow-800 dark:text-yellow-200">
+                    <i data-lucide="alert-triangle" class="w-4 h-4 inline mr-1"></i>
+                    Atención: La aplicación se reiniciará si está en ejecución.
+                </div>
+
+                <div>
+                    <label
+                        class="block text-xs font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wider">Nombre
+                        Actual</label>
+                    <div id="renameOldName"
+                        class="font-mono text-sm text-[var(--text-main)] px-3 py-2 bg-[var(--bg-color)] rounded-xl border border-[var(--border-color)]">
+                    </div>
+                </div>
+
+                <div>
+                    <label
+                        class="block text-xs font-medium text-[var(--text-muted)] mb-1 uppercase tracking-wider">Nuevo
+                        Nombre</label>
+                    <input type="text" id="renameNewName"
+                        class="w-full px-4 py-2 rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-main)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition"
+                        placeholder="nuevo-nombre-app">
+                </div>
+
+                <div class="flex justify-end gap-3 mt-6">
+                    <button onclick="closeRenameModal()"
+                        class="px-4 py-2 text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] transition">Cancelar</button>
+                    <button onclick="submitRename()"
+                        class="px-4 py-2 text-sm font-medium text-white bg-[var(--accent)] hover:bg-[var(--accent-hover)] rounded-xl shadow-lg shadow-[var(--accent)]/20 transition">Renombrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>
 
 </html>
