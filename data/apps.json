@@ -20,21 +20,21 @@
     "currentVersion": "v1764282900276",
     "health": {
       "status": "healthy",
-      "lastCheck": "2025-11-28T04:24:40.113Z",
-      "responseTime": 5
+      "lastCheck": "2025-11-28T05:32:26.682Z",
+      "responseTime": 3
     }
   },
   {
-    "name": "sendu",
+    "name": "reform-lab",
     "port": 5201,
     "type": "node",
-    "path": "C:\\dev\\minipaas\\apps\\sendu",
-    "status": "running",
-    "deployDate": "2025-11-28T04:24:13.017Z",
+    "path": "C:\\dev\\minipaas\\apps\\reform-lab\\reform-lab",
+    "status": "stopped",
+    "deployDate": "2025-11-28T05:22:35.446Z",
     "versions": [
       {
-        "versionId": "v1764303853011",
-        "deployDate": "2025-11-28T04:24:13.011Z",
+        "versionId": "v1764307355440",
+        "deployDate": "2025-11-28T05:22:35.440Z",
         "deployMethod": "zip",
         "gitUrl": null,
         "gitBranch": null,
@@ -42,11 +42,11 @@
         "backupPath": null
       }
     ],
-    "currentVersion": "v1764303853011",
+    "currentVersion": "v1764307355440",
     "health": {
       "status": "healthy",
-      "lastCheck": "2025-11-28T04:24:40.131Z",
-      "responseTime": 23
+      "lastCheck": "2025-11-28T05:32:26.683Z",
+      "responseTime": 4
     }
   }
 ]

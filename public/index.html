@@ -394,32 +394,6 @@
         </div>
     </div>
 
-    <!-- Logs Modal -->
-    <div id="logsModal"
-        class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-        <div
-            class="bg-[var(--card-bg)] w-full max-w-4xl h-[80vh] rounded-2xl shadow-2xl border border-[var(--border-color)] flex flex-col">
-            <div class="flex justify-between items-center p-4 border-b border-[var(--border-color)]">
-                <h3 class="font-semibold flex items-center gap-2 text-[var(--text-main)]">
-                    <i data-lucide="terminal" class="w-5 h-5"></i>
-                    Logs en Tiempo Real
-                </h3>
-                <div class="flex items-center gap-3">
-                    <span id="connectionStatus"
-                        class="text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400 flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-full bg-current"></span> Desconectado
-                    </span>
-                    <button onclick="closeLogs()" class="text-[var(--text-muted)] hover:text-red-500">
-                        <i data-lucide="x" class="w-6 h-6"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="flex-1 p-4 overflow-auto bg-[#0a0a0a] m-0">
-                <pre id="logsContent" class="font-mono text-xs md:text-sm text-green-400 whitespace-pre-wrap"></pre>
-            </div>
-        </div>
-    </div>
-
     <!-- Port Change Modal -->
     <div id="portModal"
         class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -435,16 +409,19 @@
             </div>
             <div class="p-6">
                 <p class="text-sm text-[var(--text-muted)] mb-4">Asigna un nuevo puerto a la aplicación <strong
-                        id="portModalAppName" class="text-[var(--text-main)]"></strong>. Si la app está en ejecución, se
+                        id="portModalAppName" class="text-[var(--text-main)]"></strong>. Si la app está en
+                    ejecución, se
                     reiniciará automáticamente.</p>
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Puerto Actual</label>
+                        <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Puerto
+                            Actual</label>
                         <input type="text" id="currentPort" disabled
                             class="w-full p-3 rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-muted)] font-mono cursor-not-allowed">
                     </div>
                     <div>
-                        <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Nuevo Puerto</label>
+                        <label class="block text-sm font-bold mb-2 text-[var(--text-muted)]">Nuevo
+                            Puerto</label>
                         <input type="number" id="newPort" min="1024" max="65535" placeholder="5200"
                             class="w-full p-3 rounded-xl bg-[var(--bg-color)] border border-[var(--border-color)] focus:ring-2 focus:ring-[var(--accent)] outline-none font-mono text-[var(--text-main)]">
                         <p class="text-xs text-[var(--text-muted)] mt-1">Rango válido: 1024 - 65535</p>
@@ -489,7 +466,8 @@
                         <p><span class="font-bold">APP_UPLOADS_PATH</span> → Para archivos subidos</p>
                         <p><span class="font-bold">APP_DB_PATH</span> → Para bases de datos</p>
                     </div>
-                    <p class="text-xs text-blue-600 dark:text-blue-400 mt-2">Estos datos se conservan al actualizar la
+                    <p class="text-xs text-blue-600 dark:text-blue-400 mt-2">Estos datos se conservan al actualizar
+                        la
                         app.</p>
                 </div>
 
@@ -562,7 +540,51 @@
         </div>
     </div>
 
-    <!-- Delete App Modal -->
+    <!-- Logs Modal -->
+    <div id="logsModal"
+        class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="bg-[#1e1e1e] w-full max-w-4xl rounded-2xl shadow-2xl border border-[#333] flex flex-col h-[80vh]">
+            <div class="flex justify-between items-center p-4 border-b border-[#333] bg-[#252526] rounded-t-2xl">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-[#333] rounded-lg">
+                        <i data-lucide="terminal" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            Logs de Aplicación
+                            <span id="logsAppName"
+                                class="text-xs font-mono bg-[#333] text-[#d4d4d4] px-2 py-0.5 rounded"></span>
+                        </h3>
+                        <div class="flex items-center gap-2 mt-0.5">
+                            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                            <span class="text-xs text-[#888]">En vivo</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="copyLogs()"
+                        class="p-2 text-[#888] hover:text-white hover:bg-[#333] rounded-lg transition"
+                        title="Copiar Logs">
+                        <i data-lucide="copy" class="w-5 h-5"></i>
+                    </button>
+                    <button onclick="clearLogs()"
+                        class="p-2 text-[#888] hover:text-white hover:bg-[#333] rounded-lg transition" title="Limpiar">
+                        <i data-lucide="trash" class="w-5 h-5"></i>
+                    </button>
+                    <div class="w-px h-6 bg-[#333] mx-1"></div>
+                    <button onclick="closeLogsModal()"
+                        class="p-2 text-[#888] hover:text-white hover:bg-[#333] rounded-lg transition">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="logsContent" class="flex-1 overflow-y-auto p-4 font-mono text-sm text-[#d4d4d4] space-y-1">
+                <!-- Logs injected here -->
+                <div class="text-[#666] italic">Esperando logs...</div>
+            </div>
+        </div>
+    </div>
+
     <div id="deleteAppModal"
         class="modal fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
         <div class="bg-[var(--card-bg)] w-full max-w-md rounded-2xl shadow-2xl border border-[var(--border-color)]">
@@ -733,11 +755,8 @@
             modal.classList.add('active');
         }
 
-        function closeConfirmModal() {
-            document.getElementById('confirmationModal').classList.remove('active');
-            confirmCallback = null;
-        }
 
+        // Modal Logic
         // Auth Check
         const token = localStorage.getItem('token');
         if (!token) window.location.href = '/login.html';
@@ -775,19 +794,24 @@
 
             socket.on('connect', () => {
                 console.log('Conectado a Socket.io');
-                document.getElementById('connectionStatus').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> Conectado';
-                document.getElementById('connectionStatus').className = "text-xs px-2 py-1 rounded-full bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400 flex items-center gap-1";
+                const statusEl = document.getElementById('connectionStatus');
+                if (statusEl) {
+                    statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> Conectado';
+                    statusEl.className = "text-xs px-2 py-1 rounded-full bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400 flex items-center gap-1";
+                }
             });
 
             socket.on('disconnect', () => {
                 console.log('Desconectado de Socket.io');
-                document.getElementById('connectionStatus').innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-500"></span> Desconectado';
-                document.getElementById('connectionStatus').className = "text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400 flex items-center gap-1";
+                const statusEl = document.getElementById('connectionStatus');
+                if (statusEl) {
+                    statusEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-500"></span> Desconectado';
+                    statusEl.className = "text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400 flex items-center gap-1";
+                }
             });
 
             // Real-time Stats Update
             socket.on('stats', (data) => {
-                // data: { appName: { cpu: '0.5', memory: '20' } }
                 Object.keys(data).forEach(appName => {
                     const cpuEl = document.getElementById(`cpu-${appName}`);
                     const memEl = document.getElementById(`mem-${appName}`);
@@ -1203,6 +1227,60 @@
                 await performAction(`${API}/${name}/restart`);
                 loadApps();
             });
+        }
+
+        // Logs Logic
+        let logsInterval = null;
+
+        async function viewLogs(name) {
+            currentLogApp = name;
+            document.getElementById('logsAppName').textContent = name;
+            document.getElementById('logsModal').classList.add('active');
+            document.getElementById('logsContent').innerHTML = '<div class="text-[#666] italic">Cargando logs...</div>';
+
+            await fetchLogs();
+            if (logsInterval) clearInterval(logsInterval);
+            logsInterval = setInterval(fetchLogs, 3000);
+        }
+
+        function closeLogsModal() {
+            document.getElementById('logsModal').classList.remove('active');
+            if (logsInterval) clearInterval(logsInterval);
+            logsInterval = null;
+            currentLogApp = null;
+        }
+
+        async function fetchLogs() {
+            if (!currentLogApp) return;
+            try {
+                const res = await fetch(`${API}/${currentLogApp}/logs`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.status === 401) { logout(); return; }
+
+                const data = await res.json();
+                const container = document.getElementById('logsContent');
+
+                if (data.logs && data.logs.length > 0) {
+                    container.innerHTML = data.logs.map(line => `<div>${line}</div>`).join('');
+                    container.scrollTop = container.scrollHeight;
+                } else {
+                    container.innerHTML = '<div class="text-[#666] italic">No hay logs disponibles</div>';
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function copyLogs() {
+            const text = document.getElementById('logsContent').innerText;
+            navigator.clipboard.writeText(text);
+            showToast('Copiado', 'Logs copiados al portapapeles', 'success');
+        }
+
+        async function clearLogs() {
+            document.getElementById('logsContent').innerHTML = '';
+            showToast('Limpiado', 'Vista de logs limpiada', 'info');
         }
 
         async function startApp(name) {

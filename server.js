@@ -114,7 +114,7 @@ io.use((socket, next) => {
 
 const upload = multer({
     dest: path.join(BASE_DIR, 'temp_uploads'),
-    limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
+    limits: { fileSize: 500 * 1024 * 1024 } // 500MB limit
 });
 const brandingUpload = multer({
     storage: multer.diskStorage({
@@ -1010,6 +1010,26 @@ app.delete('/api/apps/:name', authenticateToken, requireAdmin, (req, res) => {
     }
 });
 
+// Get app logs
+app.get('/api/apps/:name/logs', authenticateToken, requireAdmin, (req, res) => {
+    const name = req.params.name;
+    const logPath = path.join(LOGS_DIR, `${name}.log`);
+
+    if (!fs.existsSync(logPath)) {
+        return res.json({ logs: [] });
+    }
+
+    try {
+        // Read last 200 lines
+        const content = fs.readFileSync(logPath, 'utf8');
+        const lines = content.split('\n');
+        const lastLines = lines.slice(-200);
+        res.json({ logs: lastLines });
+    } catch (e) {
+        res.status(500).json({ error: 'Error leyendo logs' });
+    }
+});
+
 // Get app persistent data info
 app.get('/api/apps/:name/data-info', authenticateToken, requireAdmin, async (req, res) => {
     const name = req.params.name;
@@ -1458,23 +1478,31 @@ app.post('/api/apps/:name/rollback', authenticateToken, requireAdmin, (req, res)
     const version = (appData.versions || []).find(v => v.versionId === versionId);
     if (!version) return res.status(404).json({ error: 'Versión no encontrada' });
 
-    // Prevent rollback to same version in same path (would copy over itself)
-    if (version.path === appData.path && versionId === appData.currentVersion) {
+    // Check if version has a backup path
+    if (!version.backupPath) {
+        return res.status(400).json({ error: 'Esta versión no tiene backup disponible para rollback' });
+    }
+
+    // Prevent rollback to same version (would be pointless)
+    if (versionId === appData.currentVersion) {
         return res.status(400).json({ error: 'Ya estás en esta versión' });
+    }
+
+    // Check if backup exists
+    if (!fs.existsSync(version.backupPath)) {
+        return res.status(400).json({ error: 'El backup de esta versión ya no existe' });
     }
 
     try {
         // Stop current
         stopAppProcess(name);
 
-        // Replace current with version (only if paths differ)
-        if (version.path !== appData.path) {
-            if (fs.existsSync(appData.path)) {
-                fs.rmSync(appData.path, { recursive: true, force: true });
-            }
-            fs.mkdirSync(appData.path, { recursive: true });
-            fs.cpSync(version.path, appData.path, { recursive: true });
+        // Replace current with version backup
+        if (fs.existsSync(appData.path)) {
+            fs.rmSync(appData.path, { recursive: true, force: true });
         }
+        fs.mkdirSync(appData.path, { recursive: true });
+        fs.cpSync(version.backupPath, appData.path, { recursive: true });
 
         // Update metadata
         appData.currentVersion = versionId;
@@ -1723,7 +1751,10 @@ const init = () => {
 };
 
 // --- GRACEFUL SHUTDOWN ---
+let isShuttingDown = false;
 const gracefulShutdown = (signal) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
     console.log(`\n[SYSTEM] Received ${signal}. Shutting down gracefully...`);
 
     // Stop all running apps
