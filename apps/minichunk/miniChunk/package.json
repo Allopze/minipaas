@@ -1,0 +1,15 @@
+{
+  "name": "minichunk",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n BACKEND,FRONTEND -c blue,magenta \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
+    "start": "cross-env NODE_ENV=production node backend/src/index.js",
+    "build": "cd frontend && npm run build",
+    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install && cd .."
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3"
+  }
+}

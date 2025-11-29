@@ -1,40 +1,15 @@
 [
   {
-    "name": "casilisto",
+    "name": "minichunk",
     "port": 5200,
     "type": "node",
-    "path": "C:\\dev\\minipaas\\apps\\casilisto\\casilisto",
-    "status": "running",
-    "deployDate": "2025-11-27T22:35:00.282Z",
-    "versions": [
-      {
-        "versionId": "v1764282900276",
-        "deployDate": "2025-11-27T22:35:00.276Z",
-        "deployMethod": "zip",
-        "gitUrl": null,
-        "gitBranch": null,
-        "gitCommit": null,
-        "backupPath": null
-      }
-    ],
-    "currentVersion": "v1764282900276",
-    "health": {
-      "status": "healthy",
-      "lastCheck": "2025-11-28T05:32:26.682Z",
-      "responseTime": 3
-    }
-  },
-  {
-    "name": "reform-lab",
-    "port": 5201,
-    "type": "node",
-    "path": "C:\\dev\\minipaas\\apps\\reform-lab\\reform-lab",
+    "path": "C:\\dev\\minipaas\\apps\\minichunk\\miniChunk",
     "status": "stopped",
-    "deployDate": "2025-11-28T05:22:35.446Z",
+    "deployDate": "2025-11-29T22:51:37.792Z",
     "versions": [
       {
-        "versionId": "v1764307355440",
-        "deployDate": "2025-11-28T05:22:35.440Z",
+        "versionId": "v1764456697786",
+        "deployDate": "2025-11-29T22:51:37.786Z",
         "deployMethod": "zip",
         "gitUrl": null,
         "gitBranch": null,
@@ -42,11 +17,11 @@
         "backupPath": null
       }
     ],
-    "currentVersion": "v1764307355440",
+    "currentVersion": "v1764456697786",
     "health": {
-      "status": "healthy",
-      "lastCheck": "2025-11-28T05:32:26.683Z",
-      "responseTime": 4
+      "status": "unhealthy",
+      "lastCheck": "2025-11-29T23:31:40.824Z",
+      "responseTime": null
     }
   }
 ]

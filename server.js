@@ -17,19 +17,36 @@ const dotenv = require('dotenv');
 const rateLimit = require('express-rate-limit');
 const simpleGit = require('simple-git');
 const crypto = require('crypto');
+const helmet = require('helmet');
 const { analyzeProject } = require('./dist/deployment/analyzer');
 
 dotenv.config();
+
+// CSRF Token secret derived from JWT_SECRET
+const CSRF_SECRET = process.env.JWT_SECRET ? crypto.createHash('sha256').update(process.env.JWT_SECRET + 'csrf').digest('hex').slice(0, 32) : null;
+
+// Encryption key for webhook secrets (derived from JWT_SECRET)
+const ENCRYPTION_KEY = process.env.JWT_SECRET ? crypto.createHash('sha256').update(process.env.JWT_SECRET + 'encryption').digest('hex').slice(0, 32) : null;
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
     console.error('[SYSTEM] Missing JWT_SECRET environment variable. Create a .env with JWT_SECRET.');
     process.exit(1);
 }
+if (JWT_SECRET.length < 32) {
+    console.error('[SYSTEM] JWT_SECRET must be at least 32 characters long for security.');
+    process.exit(1);
+}
 
 // --- CONFIGURATION ---
 const PORT = Number(process.env.PORT) || 5050;
-const START_PORT = 5200;
+const START_PORT = Number(process.env.START_PORT) || 5200;
+
+// Security configuration
+const BCRYPT_ROUNDS = 12;
+const PASSWORD_MIN_LENGTH = 8;
+const MAX_VERSIONS_RETAINED = 10;
+const GIT_URL_PATTERN = /^(https?:\/\/[\w.-]+[\/:][\w.\/-]+(\.git)?|git@[\w.-]+:[\w.\/-]+(\.git)?)$/;
 const BASE_DIR = __dirname;
 const APPS_DIR = path.join(BASE_DIR, 'apps');
 const APP_DATA_DIR = path.join(BASE_DIR, 'app-data'); // Persistent data for apps
@@ -97,8 +114,22 @@ const io = new Server(server, {
     cors: corsOptions
 });
 
-// Socket.IO authentication middleware
+// Socket.IO authentication middleware with origin verification
 io.use((socket, next) => {
+    // Verify origin
+    const origin = socket.handshake.headers.origin;
+    if (origin) {
+        const localhostPattern = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+        const isAllowed = CORS_ORIGINS.length === 0 
+            ? localhostPattern.test(origin)
+            : (CORS_ORIGINS.includes(origin) || CORS_ORIGINS.includes('*'));
+        
+        if (!isAllowed) {
+            console.log(`[SOCKET] Rejected connection from unauthorized origin: ${origin}`);
+            return next(new Error('Origin not allowed'));
+        }
+    }
+    
     const token = socket.handshake.auth.token;
     if (!token) {
         return next(new Error('Authentication required'));
@@ -116,12 +147,24 @@ const upload = multer({
     dest: path.join(BASE_DIR, 'temp_uploads'),
     limits: { fileSize: 500 * 1024 * 1024 } // 500MB limit
 });
+
+// Allowed MIME types for branding images (Security Fix - no SVG to prevent XSS)
+const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/x-icon', 'image/vnd.microsoft.icon'];
+const ALLOWED_IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico'];
+
 const brandingUpload = multer({
     storage: multer.diskStorage({
         destination: (req, file, cb) => cb(null, UPLOADS_DIR),
         filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
     }),
-    limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit for branding files
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit for branding files
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (!ALLOWED_IMAGE_MIMES.includes(file.mimetype) || !ALLOWED_IMAGE_EXTS.includes(ext)) {
+            return cb(new Error('Solo se permiten imágenes PNG, JPG, GIF, WebP o ICO. SVG no está permitido por seguridad.'));
+        }
+        cb(null, true);
+    }
 });
 
 // In‑memory map of running processes
@@ -133,11 +176,98 @@ const logStreams = {};
 // In-memory map of restart counts for auto-restart policy
 const restartCounts = {};
 
+// Encryption functions for webhook secrets
+const encryptSecret = (text) => {
+    if (!ENCRYPTION_KEY || !text) return text;
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    return iv.toString('hex') + ':' + encrypted;
+};
+
+const decryptSecret = (encrypted) => {
+    if (!ENCRYPTION_KEY || !encrypted || !encrypted.includes(':')) return encrypted;
+    try {
+        const parts = encrypted.split(':');
+        const iv = Buffer.from(parts[0], 'hex');
+        const encryptedText = parts[1];
+        const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+        let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return decrypted;
+    } catch (e) {
+        // If decryption fails, assume it's a plain text secret (legacy)
+        return encrypted;
+    }
+};
+
+// CSRF Token functions
+const generateCsrfToken = (userId) => {
+    if (!CSRF_SECRET) return null;
+    const timestamp = Date.now();
+    const data = `${userId}:${timestamp}`;
+    const hmac = crypto.createHmac('sha256', CSRF_SECRET);
+    const signature = hmac.update(data).digest('hex');
+    return Buffer.from(`${data}:${signature}`).toString('base64');
+};
+
+const validateCsrfToken = (token, userId) => {
+    if (!CSRF_SECRET || !token) return false;
+    try {
+        const decoded = Buffer.from(token, 'base64').toString('utf8');
+        const [storedUserId, timestamp, signature] = decoded.split(':');
+        if (parseInt(storedUserId) !== userId) return false;
+        // Token valid for 24 hours
+        if (Date.now() - parseInt(timestamp) > 24 * 60 * 60 * 1000) return false;
+        const hmac = crypto.createHmac('sha256', CSRF_SECRET);
+        const expectedSignature = hmac.update(`${storedUserId}:${timestamp}`).digest('hex');
+        return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+    } catch (e) {
+        return false;
+    }
+};
+
+// Audit logging function
+const auditLog = (action, userId, userEmail, details = {}) => {
+    const logEntry = {
+        timestamp: new Date().toISOString(),
+        action,
+        userId,
+        userEmail,
+        details,
+        ip: details.ip || 'unknown'
+    };
+    const auditPath = path.join(LOGS_DIR, 'audit.log');
+    try {
+        fs.appendFileSync(auditPath, JSON.stringify(logEntry) + '\n');
+    } catch (e) {
+        console.error('[AUDIT] Failed to write audit log:', e);
+    }
+};
+
 // Cache for disk sizes (updated periodically, not on every request)
 const diskSizeCache = new Map();
 const DISK_CACHE_TTL = 60000; // 1 minute TTL
 
 app.use(cors(corsOptions));
+
+// Security headers with helmet
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://cdnjs.cloudflare.com"],
+            scriptSrcAttr: ["'unsafe-inline'"], // Allow inline event handlers like onclick
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com"],
+            imgSrc: ["'self'", "data:", "blob:"],
+            connectSrc: ["'self'", "ws:", "wss:", "https://unpkg.com"]
+        }
+    },
+    crossOriginEmbedderPolicy: false
+}));
+
 // Capture raw JSON body for webhook signature validation
 app.use(express.json({
     verify: (req, res, buf) => {
@@ -162,7 +292,10 @@ const getApps = () => {
 };
 const saveApps = apps => {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(DB_FILE, JSON.stringify(apps, null, 2));
+    // Atomic write: write to temp file then rename
+    const tempFile = `${DB_FILE}.tmp`;
+    fs.writeFileSync(tempFile, JSON.stringify(apps, null, 2));
+    fs.renameSync(tempFile, DB_FILE);
 };
 
 // Default branding configuration
@@ -521,6 +654,42 @@ const authLimiter = rateLimit({
     legacyHeaders: false
 });
 
+// Rate limiter for webhook endpoints
+const webhookLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute window
+    max: 10, // Max 10 webhook calls per minute per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many webhook requests. Please wait.' }
+});
+
+// --- CSRF TOKEN ENDPOINT ---
+app.get('/api/auth/csrf-token', authenticateToken, (req, res) => {
+    const token = generateCsrfToken(req.user.id);
+    if (!token) {
+        return res.status(500).json({ error: 'CSRF not configured' });
+    }
+    res.json({ csrfToken: token });
+});
+
+// CSRF validation middleware for destructive operations
+const validateCsrf = (req, res, next) => {
+    // Skip CSRF for webhook endpoints (they use their own signature validation)
+    if (req.path.includes('/webhook')) return next();
+    
+    const csrfToken = req.headers['x-csrf-token'];
+    if (!csrfToken || !validateCsrfToken(csrfToken, req.user.id)) {
+        // Log potential CSRF attack attempt
+        auditLog('CSRF_VALIDATION_FAILED', req.user?.id, req.user?.email, { 
+            ip: req.ip, 
+            path: req.path,
+            method: req.method 
+        });
+        return res.status(403).json({ error: 'Invalid or missing CSRF token' });
+    }
+    next();
+};
+
 // --- AUTH ENDPOINTS ---
 // Check if public registration is available (only if no users exist)
 app.get('/api/auth/can-register', (req, res) => {
@@ -533,15 +702,16 @@ app.get('/api/auth/can-register', (req, res) => {
 app.post('/api/auth/register', authLimiter, (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Datos incompletos' });
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) return res.status(400).json({ error: 'Email inválido' });
-    if (password.length < 6) return res.status(400).json({ error: 'Contraseña muy corta' });
+    // Stricter email validation
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+    if (!emailRegex.test(email) || email.length > 254) return res.status(400).json({ error: 'Email inválido' });
+    if (password.length < PASSWORD_MIN_LENGTH) return res.status(400).json({ error: `Contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres` });
     db.get('SELECT COUNT(*) as cnt FROM users', (err, row) => {
         if (err) return res.status(500).json({ error: 'DB error' });
         // Solo permitir registro del primer usuario (admin). Resto de registros deben ser por admin.
         if (row.cnt > 0) return res.status(403).json({ error: 'El registro público está deshabilitado. Pide a un admin que te cree un usuario.' });
         const role = 'admin';
-        bcrypt.hash(password, 10, (err, hash) => {
+        bcrypt.hash(password, BCRYPT_ROUNDS, (err, hash) => {
             if (err) return res.status(500).json({ error: 'Hash error' });
             const stmt = db.prepare('INSERT INTO users (email, password, role) VALUES (?, ?, ?)');
             stmt.run(email, hash, role, function (err) {
@@ -558,10 +728,17 @@ app.post('/api/auth/login', authLimiter, (req, res) => {
     const { email, password } = req.body;
     db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
         if (err) return res.status(500).json({ error: 'DB error' });
-        if (!user) return res.status(400).json({ error: 'Usuario no encontrado' });
+        if (!user) {
+            auditLog('LOGIN_FAILED', null, email, { ip: req.ip, reason: 'user_not_found' });
+            return res.status(400).json({ error: 'Usuario no encontrado' });
+        }
         bcrypt.compare(password, user.password, (err, ok) => {
-            if (err || !ok) return res.status(401).json({ error: 'Credenciales incorrectas' });
+            if (err || !ok) {
+                auditLog('LOGIN_FAILED', user.id, email, { ip: req.ip, reason: 'invalid_password' });
+                return res.status(401).json({ error: 'Credenciales incorrectas' });
+            }
             const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
+            auditLog('LOGIN_SUCCESS', user.id, email, { ip: req.ip });
             res.json({ status: 'ok', token, role: user.role });
         });
     });
@@ -653,18 +830,25 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
 app.post('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
     const { email, password, role } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Datos incompletos' });
-    bcrypt.hash(password, 10, (err, hash) => {
+    if (password.length < PASSWORD_MIN_LENGTH) return res.status(400).json({ error: `Contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres` });
+    bcrypt.hash(password, BCRYPT_ROUNDS, (err, hash) => {
         if (err) return res.status(500).json({ error: 'Hash error' });
         const stmt = db.prepare('INSERT INTO users (email, password, role) VALUES (?, ?, ?)');
         stmt.run(email, hash, role || 'user', function (err) {
             if (err) return res.status(500).json({ error: 'Error creando usuario' });
+            auditLog('USER_CREATED', req.user.id, req.user.email, { 
+                ip: req.ip, 
+                newUserId: this.lastID, 
+                newUserEmail: email, 
+                newUserRole: role || 'user' 
+            });
             res.json({ status: 'ok', id: this.lastID });
         });
         stmt.finalize();
     });
 });
 
-app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) => {
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, validateCsrf, (req, res) => {
     const id = parseInt(req.params.id, 10);
     const currentUserId = req.user.id;
 
@@ -688,6 +872,7 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) =
                 // Safe to delete
                 db.run('DELETE FROM users WHERE id = ?', id, function (err) {
                     if (err) return res.status(500).json({ error: 'DB error' });
+                    auditLog('USER_DELETED', req.user.id, req.user.email, { ip: req.ip, deletedUserId: id, deletedUserRole: 'admin' });
                     res.json({ status: 'ok' });
                 });
             });
@@ -695,6 +880,7 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) =
             // Not an admin, safe to delete
             db.run('DELETE FROM users WHERE id = ?', id, function (err) {
                 if (err) return res.status(500).json({ error: 'DB error' });
+                auditLog('USER_DELETED', req.user.id, req.user.email, { ip: req.ip, deletedUserId: id });
                 res.json({ status: 'ok' });
             });
         }
@@ -710,8 +896,8 @@ app.put('/api/auth/profile', authenticateToken, (req, res) => {
         return res.status(400).json({ error: 'Contraseña actual y nueva requeridas' });
     }
 
-    if (newPassword.length < 6) {
-        return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' });
+    if (newPassword.length < PASSWORD_MIN_LENGTH) {
+        return res.status(400).json({ error: `La nueva contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres` });
     }
 
     db.get('SELECT * FROM users WHERE id = ?', [userId], (err, user) => {
@@ -720,7 +906,7 @@ app.put('/api/auth/profile', authenticateToken, (req, res) => {
         bcrypt.compare(currentPassword, user.password, (err, ok) => {
             if (err || !ok) return res.status(401).json({ error: 'Contraseña actual incorrecta' });
 
-            bcrypt.hash(newPassword, 10, (err, hash) => {
+            bcrypt.hash(newPassword, BCRYPT_ROUNDS, (err, hash) => {
                 if (err) return res.status(500).json({ error: 'Hash error' });
                 db.run('UPDATE users SET password = ? WHERE id = ?', [hash, userId], (err) => {
                     if (err) return res.status(500).json({ error: 'Update error' });
@@ -817,6 +1003,11 @@ app.post('/api/apps', authenticateToken, requireAdmin, upload.single('zipFile'),
         const gitBranch = branch || 'main';
 
         if (gitUrl) {
+            // Validate Git URL to prevent command injection - Critical Security Fix
+            if (!GIT_URL_PATTERN.test(gitUrl)) {
+                return res.status(400).json({ error: 'URL de Git inválida. Solo se permiten URLs HTTPS o SSH válidas.' });
+            }
+            
             // Ensure git is available
             try {
                 require('child_process').execSync('git --version');
@@ -844,6 +1035,12 @@ app.post('/api/apps', authenticateToken, requireAdmin, upload.single('zipFile'),
                 if (!(resolved === appPath || resolved.startsWith(appPath + path.sep))) {
                     fs.unlinkSync(file.path);
                     throw new Error('El ZIP contiene rutas no permitidas');
+                }
+
+                // Check for symlinks - prevent Zip Slip via symlinks (Critical Security Fix)
+                if (entry.header && entry.header.attr && ((entry.header.attr >> 16) & 0o170000) === 0o120000) {
+                    fs.unlinkSync(file.path);
+                    throw new Error('El ZIP contiene enlaces simbólicos no permitidos');
                 }
 
                 if (entry.isDirectory) {
@@ -874,6 +1071,13 @@ app.post('/api/apps', authenticateToken, requireAdmin, upload.single('zipFile'),
         const isNode = fs.existsSync(path.join(realRoot, 'package.json'));
         const type = isNode ? 'node' : 'static';
 
+        // Validate realRoot is within APPS_DIR - Critical Security Fix
+        const resolvedAppsDir = path.resolve(APPS_DIR);
+        const resolvedRealRoot = path.resolve(realRoot);
+        if (!resolvedRealRoot.startsWith(resolvedAppsDir + path.sep) && resolvedRealRoot !== resolvedAppsDir) {
+            throw new Error('Path inválido para instalación: fuera del directorio de apps');
+        }
+
         // Install dependencies if Node
         if (isNode) {
             console.log(`[SYSTEM] Installing dependencies for ${safeName}...`);
@@ -901,6 +1105,9 @@ app.post('/api/apps', authenticateToken, requireAdmin, upload.single('zipFile'),
             existingApp.versions = existingApp.versions || [];
             existingApp.versions.push(versionMeta);
             existingApp.currentVersion = versionId;
+            
+            // Apply version retention policy
+            cleanOldVersions(existingApp);
 
             // Keep existing port and env vars
             apps[existingAppIndex] = existingApp;
@@ -930,6 +1137,14 @@ app.post('/api/apps', authenticateToken, requireAdmin, upload.single('zipFile'),
 
         // Start the app
         startAppProcess(appData);
+        
+        // Audit log
+        auditLog(isUpdate ? 'APP_UPDATED' : 'APP_DEPLOYED', req.user.id, req.user.email, {
+            ip: req.ip,
+            appName: safeName,
+            version: versionId,
+            deployMethod: deployMethod
+        });
 
         res.json({
             status: 'ok',
@@ -970,12 +1185,16 @@ app.post('/api/apps', authenticateToken, requireAdmin, upload.single('zipFile'),
             console.error('Failed to write to deploy_errors.log', logErr);
         }
 
-        res.status(500).json({ error: 'Error en despliegue: ' + e.message });
+        // Return generic error message to prevent information disclosure
+        const safeErrorMessage = e.message.includes('ZIP') || e.message.includes('Git inválida') || e.message.includes('Faltan datos')
+            ? e.message
+            : 'Error en el despliegue. Consulta los logs para más detalles.';
+        res.status(500).json({ error: safeErrorMessage });
     }
 });
 
-// Delete app
-app.delete('/api/apps/:name', authenticateToken, requireAdmin, (req, res) => {
+// Delete app (CSRF protected)
+app.delete('/api/apps/:name', authenticateToken, requireAdmin, validateCsrf, (req, res) => {
     const name = req.params.name;
     const deleteData = req.query.deleteData === 'true'; // Optional: also delete persistent data
     const apps = getApps();
@@ -1003,6 +1222,12 @@ app.delete('/api/apps/:name', authenticateToken, requireAdmin, (req, res) => {
         // Update DB
         apps.splice(appIndex, 1);
         saveApps(apps);
+        
+        auditLog('APP_DELETED', req.user.id, req.user.email, {
+            ip: req.ip,
+            appName: name,
+            dataDeleted: deleteData
+        });
 
         res.json({ status: 'ok', dataDeleted: deleteData });
     } catch (e) {
@@ -1268,29 +1493,26 @@ app.patch('/api/apps/:name/port', authenticateToken, requireAdmin, async (req, r
     res.json({ status: 'ok', oldPort, newPort: portNum, restarted: isRunning });
 });
 
-// Get Logs
-app.get('/api/apps/:name/logs', authenticateToken, requireAdmin, (req, res) => {
-    const name = req.params.name;
-    const logPath = path.join(LOGS_DIR, `${name}.log`);
-
-    if (!fs.existsSync(logPath)) return res.json({ logs: 'No hay logs disponibles.' });
-
-    // Read last 200 lines approx (simple implementation)
-    fs.readFile(logPath, 'utf8', (err, data) => {
-        if (err) return res.status(500).json({ error: 'Error leyendo logs' });
-        const lines = data.split('\n');
-        const lastLines = lines.slice(-200).join('\n');
-        res.json({ logs: lastLines });
-    });
-});
-
 // --- ENV VARIABLES ENDPOINTS ---
+const SENSITIVE_ENV_PATTERNS = /^(.*_KEY|.*_SECRET|.*_TOKEN|.*_PASSWORD|.*_API_KEY|.*_PRIVATE|DATABASE_URL|REDIS_URL)$/i;
+
 app.get('/api/apps/:name/env', authenticateToken, requireAdmin, (req, res) => {
     const name = req.params.name;
     const apps = getApps();
     const appData = apps.find(a => a.name === name);
     if (!appData) return res.status(404).json({ error: 'App no encontrada' });
-    res.json(appData.env || {});
+    
+    // Mask sensitive values for display
+    const envVars = appData.env || {};
+    const maskedEnv = {};
+    for (const [key, value] of Object.entries(envVars)) {
+        if (SENSITIVE_ENV_PATTERNS.test(key) && value && value.length > 4) {
+            maskedEnv[key] = '****' + value.slice(-4);
+        } else {
+            maskedEnv[key] = value;
+        }
+    }
+    res.json(maskedEnv);
 });
 
 app.post('/api/apps/:name/env', authenticateToken, requireAdmin, (req, res) => {
@@ -1423,20 +1645,46 @@ setInterval(async () => {
 }, 2000);
 
 // --- VERSIONING & HEALTH HELPERS ---
+
+// Clean up old versions beyond retention limit (Medium Security Fix #26)
+const cleanOldVersions = (app) => {
+    if (!app.versions || app.versions.length <= MAX_VERSIONS_RETAINED) return;
+    
+    // Sort by date, keep the most recent
+    const sortedVersions = [...app.versions].sort((a, b) => 
+        new Date(b.deployDate) - new Date(a.deployDate)
+    );
+    
+    const versionsToKeep = sortedVersions.slice(0, MAX_VERSIONS_RETAINED);
+    const versionsToRemove = sortedVersions.slice(MAX_VERSIONS_RETAINED);
+    
+    // Clean up old backup directories
+    versionsToRemove.forEach(v => {
+        if (v.backupPath && fs.existsSync(v.backupPath)) {
+            try {
+                fs.rmSync(v.backupPath, { recursive: true, force: true });
+                console.log(`[SYSTEM] Removed old version backup: ${v.backupPath}`);
+            } catch (e) {
+                console.error(`[SYSTEM] Failed to remove old backup ${v.backupPath}:`, e);
+            }
+        }
+    });
+    
+    app.versions = versionsToKeep;
+};
+
 const createAppVersion = (appName, deployMethod = 'manual', meta = {}) => {
     const apps = getApps();
     const idx = apps.findIndex(a => a.name === appName);
     if (idx === -1) throw new Error('App no encontrada');
 
     const app = apps[idx];
-    const versionsDir = path.join(APPS_DIR, appName, 'versions');
-    if (!fs.existsSync(versionsDir)) fs.mkdirSync(versionsDir, { recursive: true });
     const versionId = `v${Date.now()}`;
-    const versionPath = path.join(versionsDir, versionId);
-    fs.mkdirSync(versionPath, { recursive: true });
-    // Copy current app into version folder
+    
+    // Create backup for rollback capability
+    const backupPath = path.join(BACKUPS_DIR, `${appName}_${Date.now()}`);
     if (fs.existsSync(app.path)) {
-        fs.cpSync(app.path, versionPath, { recursive: true });
+        fs.cpSync(app.path, backupPath, { recursive: true });
     }
 
     const versionMeta = Object.assign({
@@ -1446,12 +1694,16 @@ const createAppVersion = (appName, deployMethod = 'manual', meta = {}) => {
         gitUrl: meta.gitUrl || null,
         gitBranch: meta.gitBranch || null,
         gitCommit: meta.gitCommit || null,
-        path: versionPath
+        backupPath: backupPath
     }, meta);
 
     app.versions = app.versions || [];
     app.versions.push(versionMeta);
     app.currentVersion = versionId;
+    
+    // Apply version retention policy
+    cleanOldVersions(app);
+    
     saveApps(apps);
     return versionMeta;
 };
@@ -1510,6 +1762,13 @@ app.post('/api/apps/:name/rollback', authenticateToken, requireAdmin, (req, res)
 
         // Restart
         setTimeout(() => startAppProcess(appData), 500);
+        
+        auditLog('APP_ROLLBACK', req.user.id, req.user.email, {
+            ip: req.ip,
+            appName: name,
+            versionId: versionId
+        });
+        
         res.json({ status: 'ok' });
     } catch (e) {
         console.error(e);
@@ -1519,7 +1778,7 @@ app.post('/api/apps/:name/rollback', authenticateToken, requireAdmin, (req, res)
 
 // --- WEBHOOK ENDPOINT FOR CI/CD ---
 // GitHub/GitLab webhook for auto-deploy
-app.post('/api/apps/:name/webhook', async (req, res) => {
+app.post('/api/apps/:name/webhook', webhookLimiter, async (req, res) => {
     const name = req.params.name;
     const apps = getApps();
     const appData = apps.find(a => a.name === name);
@@ -1533,10 +1792,13 @@ app.post('/api/apps/:name/webhook', async (req, res) => {
     }
 
     // REQUIRED: Verify webhook signature (GitHub uses X-Hub-Signature-256)
-    const webhookSecret = appData.webhookSecret;
-    if (!webhookSecret) {
+    const encryptedWebhookSecret = appData.webhookSecret;
+    if (!encryptedWebhookSecret) {
         return res.status(403).json({ error: 'Webhook no configurado. Configura un secreto primero en /api/apps/:name/webhook/configure' });
     }
+    
+    // Decrypt the webhook secret
+    const webhookSecret = decryptSecret(encryptedWebhookSecret);
 
     const signature = req.headers['x-hub-signature-256'];
     if (!signature || !req.rawBody) {
@@ -1568,6 +1830,18 @@ app.post('/api/apps/:name/webhook', async (req, res) => {
         // Stop current app
         stopAppProcess(name);
 
+        // Create backup before updating for rollback capability
+        const backupPath = path.join(BACKUPS_DIR, `${name}_${Date.now()}`);
+        try {
+            if (fs.existsSync(appData.path)) {
+                fs.cpSync(appData.path, backupPath, { recursive: true });
+                console.log(`[WEBHOOK] Created backup for ${name} at ${backupPath}`);
+            }
+        } catch (backupErr) {
+            console.error(`[WEBHOOK] Backup failed for ${name}:`, backupErr);
+            return res.status(500).json({ error: 'Error creating backup before webhook update' });
+        }
+
         // Pull latest changes
         const git = simpleGit(appData.path);
         await git.fetch();
@@ -1587,7 +1861,7 @@ app.post('/api/apps/:name/webhook', async (req, res) => {
             require('child_process').execSync(`${npmCmd} install --production`, { cwd: appData.path });
         }
 
-        // Create new version entry
+        // Create new version entry with backup path for rollback
         const versionId = `v${Date.now()}`;
         const versionMeta = {
             versionId,
@@ -1596,11 +1870,15 @@ app.post('/api/apps/:name/webhook', async (req, res) => {
             gitUrl: currentVersion.gitUrl,
             gitBranch: currentVersion.gitBranch || 'main',
             gitCommit: newCommit ? newCommit.trim() : null,
-            path: appData.path
+            backupPath: backupPath
         };
         appData.versions = appData.versions || [];
         appData.versions.push(versionMeta);
         appData.currentVersion = versionId;
+        
+        // Apply version retention policy
+        cleanOldVersions(appData);
+        
         saveApps(apps);
 
         // Restart app
@@ -1613,7 +1891,7 @@ app.post('/api/apps/:name/webhook', async (req, res) => {
     }
 });
 
-// Configure webhook secret for an app
+// Configure webhook secret for an app (encrypted storage)
 app.post('/api/apps/:name/webhook/configure', authenticateToken, requireAdmin, (req, res) => {
     const name = req.params.name;
     const { secret } = req.body;
@@ -1622,15 +1900,27 @@ app.post('/api/apps/:name/webhook/configure', authenticateToken, requireAdmin, (
     const idx = apps.findIndex(a => a.name === name);
     if (idx === -1) return res.status(404).json({ error: 'App no encontrada' });
 
-    apps[idx].webhookSecret = secret || null;
+    // Encrypt the webhook secret before storing
+    apps[idx].webhookSecret = secret ? encryptSecret(secret) : null;
     saveApps(apps);
+    
+    auditLog('WEBHOOK_CONFIGURED', req.user.id, req.user.email, {
+        ip: req.ip,
+        appName: name
+    });
 
     const webhookUrl = `${req.protocol}://${req.get('host')}/api/apps/${name}/webhook`;
     res.json({ status: 'ok', webhookUrl });
 });
 
 // --- HEALTH ENDPOINTS ---
+// Public health check with limited information exposure (Security Fix #14)
 app.get('/health', (req, res) => {
+    res.json({ status: 'ok', uptime: Math.round(process.uptime()) });
+});
+
+// Detailed health check for authenticated admins only
+app.get('/health/detailed', authenticateToken, requireAdmin, (req, res) => {
     const uptime = process.uptime();
     const dbStatus = fs.existsSync(SQLITE_FILE) ? 'connected' : 'missing';
     const fsStatus = fs.existsSync(APPS_DIR) ? 'ok' : 'missing';
@@ -1684,10 +1974,25 @@ setInterval(() => {
 
     if (pendingChecks === 0) return;
 
+    // Create a copy of app names to track during async operations
+    const appNames = apps.map(a => a.name);
+
     apps.forEach((appData, index) => {
         const name = appData.name;
+        
+        // Validate app still exists before health check (race condition fix)
+        const currentApps = getApps();
+        const currentApp = currentApps.find(a => a.name === name);
+        if (!currentApp) {
+            pendingChecks--;
+            if (pendingChecks === 0 && modified) {
+                saveApps(apps);
+            }
+            return;
+        }
+        
         const start = Date.now();
-        const reqOptions = { method: 'GET', host: '127.0.0.1', port: appData.port, path: '/', timeout: 3000 };
+        const reqOptions = { method: 'GET', host: '127.0.0.1', port: appData.port, path: '/', timeout: 5000 };
         const reqHealth = http.request(reqOptions, rres => {
             const ms = Date.now() - start;
             const status = rres.statusCode >= 200 && rres.statusCode < 400 ? 'healthy' : 'unhealthy';

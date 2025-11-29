@@ -7,7 +7,7 @@
     <title>Administración - Mini PaaS</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
     <link rel="stylesheet" href="/styles.css">
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@0.294.0/dist/umd/lucide.min.js" integrity="sha384-43WP8IQ+5H0ncT+LNM4dZnu+hPINYmeOuNMhTvHfszzXdFjBEji77gkq7TyjQl/U" crossorigin="anonymous"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -291,6 +291,28 @@
         // Auth Check
         const token = localStorage.getItem('token');
         if (!token) window.location.href = '/login.html';
+        
+        // CSRF Token Management
+        let csrfToken = null;
+        async function fetchCsrfToken() {
+            if (!token) return; // Skip if not authenticated
+            try {
+                const res = await fetch('/api/auth/csrf-token', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.status === 401 || res.status === 403) {
+                    // Token expired or invalid - redirect to login
+                    window.location.href = '/login.html';
+                    return;
+                }
+                if (res.ok) {
+                    const data = await res.json();
+                    csrfToken = data.csrfToken;
+                }
+            } catch (e) {
+                // Network error - silently fail
+            }
+        }
 
         // Theme Logic
         const themeToggle = document.getElementById('themeToggle');
@@ -450,12 +472,17 @@
                 if (!res.ok) throw new Error('Unauthorized');
                 const users = await res.json();
                 const tbody = document.getElementById('usersTableBody');
+                // HTML escape function to prevent XSS
+                const escapeHtml = (str) => {
+                    if (typeof str !== 'string') return str;
+                    return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+                };
                 tbody.innerHTML = users.map(u => `
                     <tr class="border-b border-[var(--border-color)] hover:bg-gray-50 dark:hover:bg-[#333] transition">
-                        <td class="py-3 px-4 text-sm font-mono text-[var(--text-muted)]">${u.id}</td>
-                        <td class="py-3 px-4 text-sm font-medium text-[var(--text-main)]">${u.email}</td>
+                        <td class="py-3 px-4 text-sm font-mono text-[var(--text-muted)]">${escapeHtml(String(u.id))}</td>
+                        <td class="py-3 px-4 text-sm font-medium text-[var(--text-main)]">${escapeHtml(u.email)}</td>
                         <td class="py-3 px-4 text-sm">
-                            <span class="px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${u.role === 'admin' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}">${u.role}</span>
+                            <span class="px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${u.role === 'admin' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}">${escapeHtml(u.role)}</span>
                         </td>
                         <td class="py-3 px-4 text-right">
                             <button onclick="deleteUser(${u.id})" class="text-[var(--text-muted)] hover:text-red-500 transition p-2">
@@ -522,17 +549,24 @@
 
         async function deleteUser(id) {
             if (!confirm('¿Estás seguro de eliminar este usuario?')) return;
+            
+            // Ensure we have a CSRF token
+            if (!csrfToken) await fetchCsrfToken();
 
             try {
                 const res = await fetch(`/api/admin/users/${id}`, {
                     method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'X-CSRF-Token': csrfToken || ''
+                    }
                 });
                 if (res.ok) {
                     showToast('Eliminado', 'Usuario eliminado correctamente', 'success');
                     loadUsers();
                 } else {
-                    showToast('Error', 'No se pudo eliminar', 'error');
+                    const data = await res.json();
+                    showToast('Error', data.error || 'No se pudo eliminar', 'error');
                 }
             } catch (e) {
                 showToast('Error', 'Error de conexión', 'error');
@@ -569,6 +603,7 @@
         } else {
             loadBranding();
             loadUsers();
+            fetchCsrfToken(); // Fetch CSRF token on load
             document.getElementById('userEmailDisplay').textContent = user.email;
             document.getElementById('userRoleDisplay').textContent = user.role;
         }

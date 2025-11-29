@@ -10,9 +10,9 @@
     <link rel="stylesheet" href="/styles.css">
     <script src="/socket.io/socket.io.js"></script>
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@0.294.0/dist/umd/lucide.min.js" integrity="sha384-43WP8IQ+5H0ncT+LNM4dZnu+hPINYmeOuNMhTvHfszzXdFjBEji77gkq7TyjQl/U" crossorigin="anonymous"></script>
     <!-- SortableJS -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js" integrity="sha512-Eezs+g9Lq4TCCq0wae01s9PuNWzHYoCMkE97e2qdkYthpI0pzC3UGB03lgEHn2XM85hDOUF6qgqqszs+iXU4UA==" crossorigin="anonymous"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -731,6 +731,29 @@
                 setTimeout(() => toast.remove(), 400);
             }, duration);
         }
+        
+        // CSRF Token Management
+        let csrfToken = null;
+        async function fetchCsrfToken() {
+            const authToken = localStorage.getItem('token');
+            if (!authToken) return; // Skip if not authenticated
+            try {
+                const res = await fetch('/api/auth/csrf-token', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (res.status === 401 || res.status === 403) {
+                    // Token expired or invalid - redirect to login
+                    logout();
+                    return;
+                }
+                if (res.ok) {
+                    const data = await res.json();
+                    csrfToken = data.csrfToken;
+                }
+            } catch (e) {
+                // Network error - silently fail, will retry on next action
+            }
+        }
 
         // Confirmation Modal Logic
         let confirmCallback = null;
@@ -755,6 +778,17 @@
             modal.classList.add('active');
         }
 
+        function closeConfirmModal() {
+            const modal = document.getElementById('confirmationModal');
+            modal.classList.remove('active');
+            confirmCallback = null;
+        }
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login.html';
+        }
 
         // Modal Logic
         // Auth Check
@@ -765,6 +799,10 @@
         let user = {};
         try {
             user = JSON.parse(atob(token.split('.')[1]));
+            // Check if token is expired (exp is in seconds)
+            if (user.exp && user.exp * 1000 < Date.now()) {
+                throw new Error('Token expired');
+            }
             document.getElementById('userEmailDisplay').textContent = user.email;
             document.getElementById('userRoleDisplay').textContent = user.role;
             if (user.role === 'admin') {
@@ -1250,6 +1288,12 @@
             currentLogApp = null;
         }
 
+        // HTML escape function to prevent XSS in logs
+        function escapeHtml(str) {
+            if (typeof str !== 'string') return str;
+            return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
         async function fetchLogs() {
             if (!currentLogApp) return;
             try {
@@ -1262,7 +1306,7 @@
                 const container = document.getElementById('logsContent');
 
                 if (data.logs && data.logs.length > 0) {
-                    container.innerHTML = data.logs.map(line => `<div>${line}</div>`).join('');
+                    container.innerHTML = data.logs.map(line => `<div>${escapeHtml(line)}</div>`).join('');
                     container.scrollTop = container.scrollHeight;
                 } else {
                     container.innerHTML = '<div class="text-[#666] italic">No hay logs disponibles</div>';
@@ -1281,6 +1325,276 @@
         async function clearLogs() {
             document.getElementById('logsContent').innerHTML = '';
             showToast('Limpiado', 'Vista de logs limpiada', 'info');
+        }
+
+        // File Manager Logic
+        let currentFileApp = null;
+        let currentFilePath = null;
+
+        async function openFilesModal(appName) {
+            currentFileApp = appName;
+            currentFilePath = null;
+            document.getElementById('filesModal').classList.add('active');
+            document.getElementById('saveFileBtn').classList.add('hidden');
+            document.getElementById('currentFileName').classList.add('hidden');
+            document.getElementById('fileEditor').value = '';
+            await loadFileList('');
+        }
+
+        function closeFilesModal() {
+            document.getElementById('filesModal').classList.remove('active');
+            currentFileApp = null;
+            currentFilePath = null;
+        }
+
+        async function loadFileList(relPath) {
+            const list = document.getElementById('fileList');
+            list.innerHTML = '<div class="text-center py-4 text-[var(--text-muted)] text-xs">Cargando...</div>';
+
+            try {
+                const res = await fetch(`${API}/${currentFileApp}/files?path=${encodeURIComponent(relPath)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.status === 401) { logout(); return; }
+                
+                const files = await res.json();
+                list.innerHTML = '';
+
+                // Add back button if not at root
+                if (relPath) {
+                    const backBtn = document.createElement('div');
+                    backBtn.className = 'flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#333] cursor-pointer text-[var(--text-muted)] text-sm';
+                    backBtn.innerHTML = '<i data-lucide="corner-up-left" class="w-4 h-4"></i> ..';
+                    backBtn.onclick = () => loadFileList(relPath.split('/').slice(0, -1).join('/'));
+                    list.appendChild(backBtn);
+                }
+
+                files.forEach(file => {
+                    const item = document.createElement('div');
+                    item.className = 'flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#333] cursor-pointer text-sm';
+                    const icon = file.isDirectory ? 'folder' : 'file-text';
+                    const iconColor = file.isDirectory ? 'text-yellow-500' : 'text-[var(--text-muted)]';
+                    item.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 ${iconColor}"></i> <span class="truncate">${escapeHtml(file.name)}</span>`;
+                    
+                    if (file.isDirectory) {
+                        item.onclick = () => loadFileList(file.path);
+                    } else {
+                        item.onclick = () => openFile(file.path, file.name);
+                    }
+                    list.appendChild(item);
+                });
+
+                lucide.createIcons({ nodes: [list] });
+            } catch (e) {
+                list.innerHTML = '<div class="text-center py-4 text-red-500 text-xs">Error cargando archivos</div>';
+            }
+        }
+
+        async function openFile(filePath, fileName) {
+            const editor = document.getElementById('fileEditor');
+            const saveBtn = document.getElementById('saveFileBtn');
+            const fileNameEl = document.getElementById('currentFileName');
+
+            editor.value = 'Cargando...';
+            
+            try {
+                const res = await fetch(`${API}/${currentFileApp}/files/content?path=${encodeURIComponent(filePath)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.status === 401) { logout(); return; }
+                
+                if (!res.ok) {
+                    const err = await res.json();
+                    editor.value = `Error: ${err.error || 'No se pudo cargar el archivo'}`;
+                    saveBtn.classList.add('hidden');
+                    return;
+                }
+
+                const data = await res.json();
+                editor.value = data.content;
+                currentFilePath = filePath;
+                fileNameEl.textContent = fileName;
+                fileNameEl.classList.remove('hidden');
+                saveBtn.classList.remove('hidden');
+            } catch (e) {
+                editor.value = 'Error cargando archivo';
+            }
+        }
+
+        async function saveCurrentFile() {
+            if (!currentFileApp || !currentFilePath) return;
+            
+            const btn = document.getElementById('saveFileBtn');
+            const editor = document.getElementById('fileEditor');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<div class="loader w-3 h-3 border-white"></div> Guardando...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`${API}/${currentFileApp}/files/content`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        path: currentFilePath,
+                        content: editor.value
+                    })
+                });
+
+                if (res.status === 401) { logout(); return; }
+                if (!res.ok) throw new Error('Error');
+
+                // Feedback visual
+                btn.innerHTML = '<i data-lucide="check" class="w-3 h-3"></i> Guardado';
+                lucide.createIcons({ nodes: [btn] });
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }, 2000);
+
+            } catch (e) {
+                showToast('Error', 'No se pudo guardar el archivo.', 'error');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // Env Vars Modal Logic
+        let currentEnvApp = null;
+
+        function openEnvModal(appName) {
+            currentEnvApp = appName;
+            document.getElementById('envModal').classList.add('active');
+            loadEnvVars();
+        }
+
+        function closeEnvModal() {
+            document.getElementById('envModal').classList.remove('active');
+            currentEnvApp = null;
+        }
+
+        async function loadEnvVars() {
+            if (!currentEnvApp) return;
+            const list = document.getElementById('envList');
+            list.innerHTML = '<div class="text-center py-2 text-[var(--text-muted)] text-sm">Cargando...</div>';
+
+            try {
+                const res = await fetch(`${API}/${currentEnvApp}/env`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.status === 401) { logout(); return; }
+                
+                const envVars = await res.json();
+                list.innerHTML = '';
+
+                Object.entries(envVars).forEach(([key, value]) => {
+                    addEnvRow(key, value);
+                });
+
+                if (Object.keys(envVars).length === 0) {
+                    addEnvRow();
+                }
+            } catch (e) {
+                list.innerHTML = '<div class="text-center py-2 text-red-500 text-sm">Error cargando variables</div>';
+            }
+        }
+
+        function addEnvRow(key = '', value = '') {
+            const list = document.getElementById('envList');
+            const row = document.createElement('div');
+            row.className = 'flex gap-2 items-center';
+            row.innerHTML = `
+                <input type="text" placeholder="VARIABLE" value="${escapeHtml(key)}" class="flex-1 px-3 py-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] font-mono text-sm focus:ring-2 focus:ring-[var(--accent)] outline-none">
+                <span class="text-[var(--text-muted)]">=</span>
+                <input type="text" placeholder="valor" value="${escapeHtml(value)}" class="flex-1 px-3 py-2 rounded-lg bg-[var(--bg-color)] border border-[var(--border-color)] font-mono text-sm focus:ring-2 focus:ring-[var(--accent)] outline-none">
+                <button type="button" onclick="this.parentElement.remove()" class="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+            `;
+            list.appendChild(row);
+            lucide.createIcons({ nodes: [row] });
+        }
+
+        async function saveEnvVars() {
+            if (!currentEnvApp) return;
+            
+            const list = document.getElementById('envList');
+            const rows = list.querySelectorAll('div');
+            const envVars = {};
+
+            rows.forEach(row => {
+                const inputs = row.querySelectorAll('input');
+                if (inputs.length >= 2) {
+                    const key = inputs[0].value.trim();
+                    const value = inputs[1].value;
+                    if (key) {
+                        envVars[key] = value;
+                    }
+                }
+            });
+
+            try {
+                const res = await fetch(`${API}/${currentEnvApp}/env`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(envVars)
+                });
+
+                if (res.status === 401) { logout(); return; }
+                if (!res.ok) throw new Error('Error');
+
+                showToast('Guardado', 'Variables de entorno actualizadas. Reinicia la app para aplicar.', 'success');
+                closeEnvModal();
+            } catch (e) {
+                showToast('Error', 'No se pudieron guardar las variables.', 'error');
+            }
+        }
+
+        // Port Modal Logic
+        let currentPortApp = null;
+
+        function openPortModal(appName, currentPort) {
+            currentPortApp = appName;
+            document.getElementById('portModalAppName').textContent = appName;
+            document.getElementById('currentPort').value = currentPort;
+            document.getElementById('newPort').value = '';
+            document.getElementById('portModal').classList.add('active');
+        }
+
+        function closePortModal() {
+            document.getElementById('portModal').classList.remove('active');
+            currentPortApp = null;
+        }
+
+        async function saveNewPort() {
+            if (!currentPortApp) return;
+            
+            const newPort = document.getElementById('newPort').value;
+            if (!newPort) {
+                showToast('Error', 'Ingresa un puerto válido', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API}/${currentPortApp}/port`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ port: parseInt(newPort) })
+                });
+
+                if (res.status === 401) { logout(); return; }
+                
+                const data = await res.json();
+                if (!res.ok) {
+                    showToast('Error', data.error || 'No se pudo cambiar el puerto', 'error');
+                    return;
+                }
+
+                showToast('Puerto Cambiado', `Nuevo puerto: ${data.newPort}${data.restarted ? ' (app reiniciada)' : ''}`, 'success');
+                closePortModal();
+                loadApps();
+            } catch (e) {
+                showToast('Error', 'Error cambiando el puerto', 'error');
+            }
         }
 
         async function startApp(name) {
@@ -1339,11 +1653,17 @@
 
             btn.disabled = true;
             btn.textContent = 'Eliminando...';
+            
+            // Ensure we have a CSRF token
+            if (!csrfToken) await fetchCsrfToken();
 
             try {
                 const res = await fetch(`${API}/${name}?deleteData=${deleteData}`, {
                     method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'X-CSRF-Token': csrfToken || ''
+                    }
                 });
 
                 if (res.status === 401) { logout(); return; }
@@ -1361,39 +1681,6 @@
             }
         }
 
-        async function saveCurrentFile() {
-            const btn = document.getElementById('saveFileBtn');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<div class="loader w-3 h-3 border-white"></div> Guardando...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch(`${API}/${currentFileApp}/files/content`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        path: filePath,
-                        content: editor.value
-                    })
-                });
-
-                if (res.status === 401) { logout(); return; }
-                if (!res.ok) throw new Error('Error');
-
-                // Feedback visual
-                btn.innerHTML = '<i data-lucide="check" class="w-3 h-3"></i> Guardado';
-                setTimeout(() => {
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                }, 2000);
-
-            } catch (e) {
-                showToast('Error', 'No se pudo guardar el archivo.', 'error');
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }
-        }
-
         // Confirmation Modal Logic
         function openConfirmModal(message, onConfirm) {
             document.getElementById('confirmationMessage').textContent = message;
@@ -1404,6 +1691,7 @@
         // Init
         loadBranding();
         loadApps();
+        fetchCsrfToken(); // Fetch CSRF token on load
         setInterval(loadApps, 10000);
 
         // Versions Modal Logic

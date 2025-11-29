@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  minichunk:
+    build: .
+    container_name: minichunk
+    ports:
+      - "3001:3001"
+    volumes:
+      # Persist data directory
+      - ./data:/app/backend/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      # REQUIRED: Set your JWT secret (generate with: openssl rand -hex 32)
+      - JWT_SECRET=${JWT_SECRET}
+      # Optional: Set allowed origins
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3001}
+      # Optional: Set log level
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# Volume for persistent data
+volumes:
+  minichunk-data:
